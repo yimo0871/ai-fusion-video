@@ -529,12 +529,14 @@ export default function ProjectOverviewPage() {
         <CreateScriptDialog
           open={showCreateDialog}
           projectId={projectId}
+          projectName={project?.name}
           onClose={() => setShowCreateDialog(false)}
           onCreated={() => loadAllData()}
         />
         <ParseScriptDialog
           open={showParseDialog}
           projectId={projectId}
+          projectName={project?.name}
           mode={parseMode}
           onClose={() => setShowParseDialog(false)}
           onCreated={handleAiScriptCreated}

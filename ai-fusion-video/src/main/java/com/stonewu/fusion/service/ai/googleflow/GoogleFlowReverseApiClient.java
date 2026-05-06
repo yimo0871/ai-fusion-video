@@ -8,6 +8,7 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
@@ -43,6 +44,7 @@ public class GoogleFlowReverseApiClient {
     private static final String DEFAULT_LOCAL_MEDIA_BASE_PATH = "./data/media";
 
     private final StorageConfigService storageConfigService;
+    private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
 
     private final OkHttpClient streamHttpClient = new OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -217,6 +219,10 @@ public class GoogleFlowReverseApiClient {
     private BinaryResource loadBinaryResource(String sourceUrl) throws IOException {
         if (sourceUrl.startsWith("/media/")) {
             return loadLocalMedia(sourceUrl);
+        }
+        if (presetArtStyleResourceResolver.isPresetArtStylePath(sourceUrl)) {
+            PresetArtStyleResourceResolver.PresetArtStyleResource resource = presetArtStyleResourceResolver.load(sourceUrl);
+            return new BinaryResource(resource.bytes(), resource.mimeType());
         }
         Request request = new Request.Builder()
                 .url(sourceUrl)

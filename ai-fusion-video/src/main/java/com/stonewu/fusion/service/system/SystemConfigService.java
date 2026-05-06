@@ -21,6 +21,7 @@ import java.util.List;
 public class SystemConfigService {
 
     private final SystemConfigMapper systemConfigMapper;
+    private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
 
     /**
      * 获取配置值
@@ -80,8 +81,9 @@ public class SystemConfigService {
      * 将相对路径解析为完整的公网可访问 URL
      * <p>
      * 1. 已是完整 URL (http/https) → 直接返回
-     * 2. 有 site_base_url → 拼接
-     * 3. 都没有 → 返回 null
+    * 2. 预设画风图 (/art-styles/** 或 /api/art-styles/**) 统一映射到后端静态资源端点 /api/art-styles/**
+    * 3. 其他相对路径在有 site_base_url 时直接拼接
+    * 4. 没有 site_base_url 时，预设画风图返回相对 API 路径，兼容本地直连后端
      */
     public String resolvePublicUrl(String relativePath) {
         if (StrUtil.isBlank(relativePath)) {
@@ -91,11 +93,33 @@ public class SystemConfigService {
         if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) {
             return relativePath;
         }
+        String normalizedPath = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
+        if (presetArtStyleResourceResolver.isPresetArtStylePath(normalizedPath)) {
+            String apiPath = presetArtStyleResourceResolver.toApiPath(normalizedPath);
+            if (StrUtil.isBlank(apiPath)) {
+                return normalizedPath;
+            }
+            String siteBaseUrl = getSiteBaseUrl();
+            if (StrUtil.isBlank(siteBaseUrl)) {
+                return apiPath;
+            }
+            return buildApiUrl(siteBaseUrl, apiPath);
+        }
         // 拼接站点域名
         String siteBaseUrl = getSiteBaseUrl();
         if (StrUtil.isNotBlank(siteBaseUrl)) {
-            return siteBaseUrl + relativePath;
+            return siteBaseUrl + normalizedPath;
         }
         return null;
+    }
+
+    private String buildApiUrl(String siteBaseUrl, String apiPath) {
+        if (StrUtil.isBlank(siteBaseUrl)) {
+            return apiPath;
+        }
+        if (siteBaseUrl.endsWith("/api") && apiPath.startsWith("/api/")) {
+            return siteBaseUrl + apiPath.substring("/api".length());
+        }
+        return siteBaseUrl + apiPath;
     }
 }

@@ -20,7 +20,7 @@ COPY --from=deps /build/node_modules ./node_modules
 COPY . .
 
 # 构建时注入后端 API 地址（NEXT_PUBLIC_ 变量在 build 时烘焙进客户端 JS）
-ARG NEXT_PUBLIC_API_BASE_URL=/api
+ARG NEXT_PUBLIC_API_BASE_URL=
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 

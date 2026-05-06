@@ -18,6 +18,7 @@ import com.stonewu.fusion.service.generation.ImageGenerationService;
 import com.stonewu.fusion.service.generation.strategy.ImageGenerationStrategy;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
@@ -66,6 +67,7 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
     private final ModelPresetService modelPresetService;
     private final MediaStorageService mediaStorageService;
     private final StorageConfigService storageConfigService;
+    private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
     private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
@@ -679,6 +681,10 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         }
         if (trimmed.startsWith("/media/")) {
             return loadLocalMedia(trimmed);
+        }
+        if (presetArtStyleResourceResolver.isPresetArtStylePath(trimmed)) {
+            PresetArtStyleResourceResolver.PresetArtStyleResource resource = presetArtStyleResourceResolver.load(trimmed);
+            return new BinaryResource(resource.bytes(), resource.mimeType(), extensionFromMimeType(resource.mimeType()));
         }
         if (trimmed.startsWith("file:")) {
             return loadFile(Paths.get(URI.create(trimmed)));

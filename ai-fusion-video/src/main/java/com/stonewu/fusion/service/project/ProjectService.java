@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.project;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.PageResult;
@@ -54,6 +55,7 @@ public class ProjectService {
     @CacheEvict(value = "project", allEntries = true)
     @Transactional
     public Project create(Project project) {
+        validateProjectMediaUrls(project);
         projectMapper.insert(project);
         return project;
     }
@@ -62,6 +64,7 @@ public class ProjectService {
     @Transactional
     public Project update(Project project) {
         getById(project.getId());
+        validateProjectMediaUrls(project);
         projectMapper.updateById(project);
         return project;
     }
@@ -120,5 +123,19 @@ public class ProjectService {
         memberMapper.delete(new LambdaQueryWrapper<ProjectMember>()
                 .eq(ProjectMember::getProjectId, projectId)
                 .eq(ProjectMember::getUserId, userId));
+    }
+
+    private void validateProjectMediaUrls(Project project) {
+        if (project == null) {
+            return;
+        }
+        rejectDataUrl(project.getCoverUrl(), "coverUrl");
+        rejectDataUrl(project.getArtStyleImageUrl(), "artStyleImageUrl");
+    }
+
+    private void rejectDataUrl(String rawUrl, String fieldName) {
+        if (StrUtil.isNotBlank(rawUrl) && StrUtil.startWithIgnoreCase(rawUrl.trim(), "data:")) {
+            throw new BusinessException(fieldName + " 不支持 base64，请先调用 /api/storage/upload 上传二进制文件");
+        }
     }
 }

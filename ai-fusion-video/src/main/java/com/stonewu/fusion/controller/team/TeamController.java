@@ -24,7 +24,7 @@ import static com.stonewu.fusion.security.SecurityUtils.getCurrentUserId;
 
 @Tag(name = "团队管理")
 @RestController
-@RequestMapping("/team")
+@RequestMapping("/api/team")
 @RequiredArgsConstructor
 public class TeamController {
 

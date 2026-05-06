@@ -17,12 +17,12 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { scriptApi } from "@/lib/api/script";
 import {
   storyboardApi,
   type Storyboard,
   type StoryboardItem,
   type StoryboardScene,
-  type StoryboardEpisode,
 } from "@/lib/api/storyboard";
 import { StoryboardSidebar } from "./_components/storyboard-sidebar";
 import { StoryboardTableView } from "./_components/storyboard-table-view";
@@ -30,6 +30,7 @@ import { StoryboardCardView } from "./_components/storyboard-card-view";
 import { StoryboardRefPanel } from "./_components/storyboard-ref-panel";
 import { CreateStoryboardDialog } from "./_components/create-dialog";
 import { useFullWidth } from "@/lib/hooks/use-layout";
+import { useProject } from "../project-context";
 
 type ViewMode = "table" | "card";
 
@@ -48,6 +49,8 @@ interface SceneWithItems {
 export default function StoryboardTabPage() {
   const params = useParams();
   const projectId = Number(params.id);
+  const { project } = useProject();
+  const { addPipeline, setPanelExpanded, setExpandedTaskId } = usePipelineStore();
 
   // 分镜页始终占满 layout 宽度
   useFullWidth(true);
@@ -127,6 +130,61 @@ export default function StoryboardTabPage() {
   useEffect(() => {
     loadStoryboard();
   }, [loadStoryboard]);
+
+  const handleAiStoryboard = useCallback(async () => {
+    try {
+      const scripts = await scriptApi.list(projectId);
+      const currentScript = scripts[0] ?? null;
+
+      if (!currentScript) {
+        alert("请先创建剧本后再使用 AI 生成分镜");
+        return;
+      }
+
+      const storyboardTitle =
+        currentScript.title?.trim() || project?.name?.trim() || "AI 分镜";
+      const scriptDisplayTitle =
+        currentScript.title?.trim() || project?.name?.trim() || "未命名项目";
+
+      const newStoryboard = await storyboardApi.create({
+        projectId,
+        scriptId: currentScript.id,
+        title: storyboardTitle,
+      });
+
+      const pipelineId = addPipeline({
+        label: `AI 生成分镜 - ${scriptDisplayTitle}`,
+        projectId,
+        request: {
+          agentType: "script_to_storyboard",
+          category: "pipeline",
+          title: `AI 生成分镜：${scriptDisplayTitle}`,
+          projectId,
+          context: {
+            scriptId: currentScript.id,
+            storyboardId: newStoryboard.id,
+          },
+        },
+        onComplete: () => {
+          loadStoryboard();
+        },
+      });
+
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+      await loadStoryboard();
+    } catch (err) {
+      console.error("创建分镜记录失败:", err);
+      alert("创建分镜记录失败，请重试");
+    }
+  }, [
+    addPipeline,
+    loadStoryboard,
+    project?.name,
+    projectId,
+    setExpandedTaskId,
+    setPanelExpanded,
+  ]);
 
   // AI 工具执行后自动刷新
   const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
@@ -482,7 +540,7 @@ export default function StoryboardTabPage() {
               手动创建
             </button>
             <button
-              onClick={() => alert("AI 分镜功能开发中，敬请期待")}
+              onClick={handleAiStoryboard}
               className={cn(
                 "flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium",
                 "bg-linear-to-r from-cyan-600 to-blue-600",
@@ -499,6 +557,7 @@ export default function StoryboardTabPage() {
         <CreateStoryboardDialog
           open={showCreateDialog}
           projectId={projectId}
+          projectName={project?.name}
           onClose={() => setShowCreateDialog(false)}
           onCreated={loadStoryboard}
         />

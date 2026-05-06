@@ -15,9 +15,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { projectApi, type ProjectCreateReq } from "@/lib/api/project";
-import { artStyleApi, uploadFile } from "@/lib/api/art-style";
+import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
-import { storageConfigApi } from "@/lib/api/storage";
+import { storageConfigApi, uploadFile } from "@/lib/api/storage";
 import { resolveMediaUrl, http } from "@/lib/api/client";
 
 // 项目类型选项

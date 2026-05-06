@@ -69,12 +69,12 @@ services:
       context: ./ai-fusion-video-web
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: /api
+        NEXT_PUBLIC_API_BASE_URL: ""
     image: ai-fusion-video-web:local
     container_name: fusion-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: /api
+      NEXT_PUBLIC_API_BASE_URL: ""
     depends_on:
       - backend
 

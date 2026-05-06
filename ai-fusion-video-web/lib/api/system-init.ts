@@ -19,12 +19,12 @@ export interface SetupReqVO {
  * 获取系统初始化状态
  */
 export function getInitStatus(): Promise<InitStatusResp> {
-  return http.get<never, InitStatusResp>("/system/init/status");
+  return http.get<never, InitStatusResp>("/api/system/init/status");
 }
 
 /**
  * 初始化管理员账号（首次启动时）
  */
 export function setupAdmin(data: SetupReqVO): Promise<LoginRespVO> {
-  return http.post<never, LoginRespVO>("/system/init/setup", data);
+  return http.post<never, LoginRespVO>("/api/system/init/setup", data);
 }

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { AppHeader } from "@/components/dashboard/app-header";
+import { VersionUpdateNotifier } from "@/components/dashboard/version-update-notifier";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
@@ -79,6 +80,8 @@ export default function DashboardLayout({
   return (
     <LayoutContext value={layoutCtx}>
       <div className="h-screen overflow-hidden flex flex-col bg-background">
+        <VersionUpdateNotifier />
+
         {/* 顶部浮动导航栏 */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}

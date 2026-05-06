@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { cn } from "@/lib/utils";
+import { uploadFile } from "@/lib/api/storage";
 import { resolveMediaUrl } from "@/lib/api/client";
 import {
   assetApi,
@@ -291,6 +292,7 @@ function AssetItemEditPanel({
   const [itemFields, setItemFields] = useState<FieldDef[]>([]);
   const [itemMetaLoading, setItemMetaLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
   const [urlMode, setUrlMode] = useState(false);
@@ -358,28 +360,32 @@ function AssetItemEditPanel({
     }
   };
 
+  const uploadItemImage = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    try {
+      setUploading(true);
+      const uploadedUrl = await uploadFile(file, "assets");
+      setImageUrl(uploadedUrl);
+      setDirty(true);
+    } catch (err) {
+      console.error("上传子资产图片失败:", err);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setImageUrl(result);
-      setDirty(true);
-    };
-    reader.readAsDataURL(file);
+    void uploadItemImage(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageUrl(reader.result as string);
-      setDirty(true);
-    };
-    reader.readAsDataURL(file);
+    void uploadItemImage(file);
   };
 
   return (
@@ -405,7 +411,7 @@ function AssetItemEditPanel({
         </button>
         <button
           onClick={handleSave}
-          disabled={!dirty || saving}
+          disabled={!dirty || saving || uploading}
           className={cn(
             "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
             dirty
@@ -413,7 +419,7 @@ function AssetItemEditPanel({
               : "bg-muted/30 text-muted-foreground/40 cursor-not-allowed"
           )}
         >
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+          {saving || uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
           保存
         </button>
       </div>
@@ -515,7 +521,7 @@ function AssetItemEditPanel({
           </button>
           {urlMode && (
             <Input
-              value={imageUrl.startsWith("data:") ? "" : imageUrl}
+              value={imageUrl}
               onChange={(e) => { setImageUrl(e.target.value); setDirty(true); }}
               placeholder="粘贴图片链接..."
               className="h-7 text-xs"
@@ -838,6 +844,7 @@ export default function AssetDetailPanel(props: Props) {
   const [items, setItems] = useState<AssetItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [dirty, setDirty] = useState(false);
   const coverFileRef = useRef<HTMLInputElement>(null);
   const [showCoverLightbox, setShowCoverLightbox] = useState(false);
@@ -892,6 +899,20 @@ export default function AssetDetailPanel(props: Props) {
     setProperties((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
+
+  const uploadCoverImage = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    try {
+      setCoverUploading(true);
+      const uploadedUrl = await uploadFile(file, "assets");
+      setCoverUrl(uploadedUrl);
+      setDirty(true);
+    } catch (err) {
+      console.error("上传资产封面失败:", err);
+    } finally {
+      setCoverUploading(false);
+    }
+  }, []);
 
   const handleSave = async () => {
     if (!asset) return;
@@ -1050,7 +1071,7 @@ export default function AssetDetailPanel(props: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={!dirty || saving}
+            disabled={!dirty || saving || coverUploading}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
               dirty
@@ -1058,7 +1079,7 @@ export default function AssetDetailPanel(props: Props) {
                 : "bg-muted/30 text-muted-foreground/40 cursor-not-allowed"
             )}
           >
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+            {saving || coverUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             保存
           </button>
         </div>
@@ -1104,9 +1125,7 @@ export default function AssetDetailPanel(props: Props) {
                   e.preventDefault();
                   const file = e.dataTransfer.files?.[0];
                   if (!file || !file.type.startsWith("image/")) return;
-                  const reader = new FileReader();
-                  reader.onload = () => { setCoverUrl(reader.result as string); setDirty(true); };
-                  reader.readAsDataURL(file);
+                  void uploadCoverImage(file);
                 }}
               >
                 {coverUrl ? (
@@ -1154,10 +1173,9 @@ export default function AssetDetailPanel(props: Props) {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
+                    e.target.value = "";
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => { setCoverUrl(reader.result as string); setDirty(true); };
-                    reader.readAsDataURL(file);
+                    void uploadCoverImage(file);
                   }}
                 />
               </div>
@@ -1172,7 +1190,7 @@ export default function AssetDetailPanel(props: Props) {
                 </button>
                 {coverUrlMode && (
                   <Input
-                    value={coverUrl.startsWith("data:") ? "" : coverUrl}
+                    value={coverUrl}
                     onChange={(e) => { setCoverUrl(e.target.value); setDirty(true); }}
                     placeholder="粘贴封面图片链接..."
                     className="h-7 text-xs"

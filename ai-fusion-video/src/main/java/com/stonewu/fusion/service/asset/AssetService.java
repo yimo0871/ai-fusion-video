@@ -137,6 +137,7 @@ public class AssetService {
     @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
     @Transactional
     public Asset create(Asset asset) {
+        validateAssetMediaUrls(asset);
         assetMapper.insert(asset);
 
         // 自动创建初始子资产，名称使用主资产名称
@@ -156,6 +157,7 @@ public class AssetService {
     @Transactional
     public Asset update(Asset asset) {
         getById(asset.getId());
+        validateAssetMediaUrls(asset);
         assetMapper.updateById(asset);
         return asset;
     }
@@ -185,6 +187,7 @@ public class AssetService {
     @CacheEvict(value = { "assetItem", "asset" }, allEntries = true)
     @Transactional
     public AssetItem createItem(AssetItem item) {
+        validateAssetItemMediaUrls(item);
         assetItemMapper.insert(item);
         syncCoverIfAbsent(item);
         return item;
@@ -196,6 +199,7 @@ public class AssetService {
         AssetItem existing = assetItemMapper.selectById(item.getId());
         if (existing == null)
             throw new BusinessException("子资产不存在: " + item.getId());
+        validateAssetItemMediaUrls(item);
         assetItemMapper.updateById(item);
         // 部分更新时 item 可能缺少 assetId/imageUrl/itemType，用 existing 补全
         if (item.getAssetId() == null) {
@@ -215,6 +219,27 @@ public class AssetService {
     @Transactional
     public void deleteItem(Long id) {
         assetItemMapper.deleteById(id);
+    }
+
+    private void validateAssetMediaUrls(Asset asset) {
+        if (asset == null) {
+            return;
+        }
+        rejectDataUrl(asset.getCoverUrl(), "coverUrl");
+    }
+
+    private void validateAssetItemMediaUrls(AssetItem item) {
+        if (item == null) {
+            return;
+        }
+        rejectDataUrl(item.getImageUrl(), "imageUrl");
+        rejectDataUrl(item.getThumbnailUrl(), "thumbnailUrl");
+    }
+
+    private void rejectDataUrl(String rawUrl, String fieldName) {
+        if (StrUtil.isNotBlank(rawUrl) && StrUtil.startWithIgnoreCase(rawUrl.trim(), "data:")) {
+            throw new BusinessException(fieldName + " 不支持 base64，请先调用 /api/storage/upload 上传二进制文件");
+        }
     }
 
     /**

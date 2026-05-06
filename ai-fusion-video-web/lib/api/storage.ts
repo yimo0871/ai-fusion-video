@@ -1,4 +1,5 @@
-import { http } from "./client";
+import axios from "axios";
+import { http, API_BASE_URL } from "./client";
 
 // ============================================================
 // 类型定义
@@ -58,26 +59,59 @@ export const STORAGE_TYPE_LABELS: Record<string, string> = {
 
 export const storageConfigApi = {
   async create(data: StorageConfigSaveReq): Promise<number> {
-    return http.post("/storage/config/create", data);
+    return http.post("/api/storage/config/create", data);
   },
 
   async update(data: StorageConfigSaveReq): Promise<boolean> {
-    return http.put("/storage/config/update", data);
+    return http.put("/api/storage/config/update", data);
   },
 
   async delete(id: number): Promise<boolean> {
-    return http.delete("/storage/config/delete", { params: { id } });
+    return http.delete("/api/storage/config/delete", { params: { id } });
   },
 
   async get(id: number): Promise<StorageConfig> {
-    return http.get("/storage/config/get", { params: { id } });
+    return http.get("/api/storage/config/get", { params: { id } });
   },
 
   async list(): Promise<StorageConfig[]> {
-    return http.get("/storage/config/list");
+    return http.get("/api/storage/config/list");
   },
 
   async setDefault(id: number): Promise<boolean> {
-    return http.put("/storage/config/set-default", null, { params: { id } });
+    return http.put("/api/storage/config/set-default", null, { params: { id } });
   },
 };
+
+export async function uploadFile(
+  file: File,
+  subDir: string = "uploads"
+): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("subDir", subDir);
+
+  const token = (() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = localStorage.getItem("auth-storage");
+      if (stored) return JSON.parse(stored)?.state?.token;
+    } catch {
+      // ignore
+    }
+    return null;
+  })();
+
+  const resp = await axios.post(`${API_BASE_URL}/api/storage/upload`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  const result = resp.data;
+  if (result.code !== 0) {
+    throw new Error(result.msg || "上传失败");
+  }
+  return result.data;
+}

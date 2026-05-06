@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
@@ -42,6 +43,9 @@ public class AiModelService {
         } catch (DuplicateKeyException e) {
             throwDuplicateCodeException(aiModel.getApiConfigId(), e);
         }
+        if (Boolean.TRUE.equals(aiModel.getDefaultModel())) {
+            clearOtherDefaults(aiModel.getModelType(), aiModel.getId());
+        }
         return aiModel.getId();
     }
 
@@ -76,6 +80,9 @@ public class AiModelService {
             aiModelMapper.updateById(model);
         } catch (DuplicateKeyException e) {
             throwDuplicateCodeException(nextApiConfigId, e);
+        }
+        if (Boolean.TRUE.equals(model.getDefaultModel())) {
+            clearOtherDefaults(model.getModelType(), model.getId());
         }
         chatModelFactory.evict(id);
         agentScopeModelFactory.evict(id);
@@ -158,5 +165,16 @@ public class AiModelService {
     private void throwDuplicateCodeException(Long apiConfigId, DuplicateKeyException e) {
         throw new BusinessException(400,
                 apiConfigId != null ? "同一 API 配置下模型标识已存在" : "未绑定 API 配置的模型标识已存在");
+    }
+
+    private void clearOtherDefaults(Integer modelType, Long excludeId) {
+        if (modelType == null || excludeId == null) {
+            return;
+        }
+        aiModelMapper.update(null, new LambdaUpdateWrapper<AiModel>()
+                .set(AiModel::getDefaultModel, false)
+                .eq(AiModel::getDefaultModel, true)
+                .eq(AiModel::getModelType, modelType)
+                .ne(AiModel::getId, excludeId));
     }
 }

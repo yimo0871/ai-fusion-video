@@ -7,12 +7,14 @@ import { CreateScriptDialog } from "@/components/dashboard/create-script-dialog"
 
 export function EmptyState({
   projectId,
+  projectName,
   showCreateDialog,
   onShowCreateDialog,
   onCreated,
   onParseScript,
 }: {
   projectId: number;
+  projectName?: string;
   showCreateDialog: boolean;
   onShowCreateDialog: (show: boolean) => void;
   onCreated: () => void;
@@ -64,6 +66,7 @@ export function EmptyState({
       <CreateScriptDialog
         open={showCreateDialog}
         projectId={projectId}
+        projectName={projectName}
         onClose={() => onShowCreateDialog(false)}
         onCreated={onCreated}
       />

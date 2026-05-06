@@ -41,6 +41,13 @@ public class AgentMessageService {
 
     public AgentMessage saveAssistantMessage(String conversationId, String content,
                                              String reasoningContent, Long reasoningDurationMs) {
+        return saveAssistantMessage(conversationId, content, reasoningContent,
+                reasoningDurationMs, null);
+    }
+
+    public AgentMessage saveAssistantMessage(String conversationId, String content,
+                                             String reasoningContent, Long reasoningDurationMs,
+                                             String parentToolCallId) {
         boolean hasContent = StrUtil.isNotEmpty(content);
         boolean hasReasoning = StrUtil.isNotEmpty(reasoningContent);
         if (!hasContent && !hasReasoning) {
@@ -51,6 +58,7 @@ public class AgentMessageService {
                 .conversationId(conversationId)
                 .role("assistant")
                 .content(hasContent ? content : null)
+                .parentToolCallId(parentToolCallId)
                 .reasoningContent(hasReasoning ? reasoningContent : null)
                 .reasoningDurationMs(reasoningDurationMs)
                 .messageOrder(nextOrder)

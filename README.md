@@ -5,7 +5,7 @@
   <strong>融光，基于 Agent 的智能视频创作平台</strong>
 </p>
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.4.0-blue" alt="version" />
+  <img src="https://img.shields.io/github/v/release/Stonewuu/ai-fusion-video?display_name=tag" alt="version" />
 </p>
 
 ---
@@ -29,6 +29,7 @@
 - **🎥 AI 视频生成** — 基于分镜描述和参考图生成视频片段
 - **📦 素材管理** — 统一管理项目内的图片、视频等素材资源
 - **🤖 多模型支持** — 集成 OpenAI、Claude、Gemini、通义千问、DeepSeek、Ollama 等主流大模型
+- **⬆️ 版本更新检查** — 在系统设置中检测 GitHub Release 新版本并给出升级指引
 
 https://github.com/user-attachments/assets/fe71cbb8-f9d9-4351-9a4c-cb8a0a6af7ba
 

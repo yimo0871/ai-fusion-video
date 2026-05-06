@@ -22,7 +22,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
 
 @Tag(name = "用户管理")
 @RestController
-@RequestMapping("/system/user")
+@RequestMapping("/api/system/user")
 @RequiredArgsConstructor
 public class UserController {
 

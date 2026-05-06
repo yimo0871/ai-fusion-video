@@ -36,7 +36,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
  */
 @Tag(name = "认证管理")
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 

@@ -24,7 +24,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
 
 @Tag(name = "API配置管理")
 @RestController
-@RequestMapping("/ai/api-config")
+@RequestMapping("/api/ai/api-config")
 @RequiredArgsConstructor
 public class ApiConfigController {
 

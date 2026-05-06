@@ -23,7 +23,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
  */
 @Tag(name = "存储配置管理")
 @RestController
-@RequestMapping("/storage/config")
+@RequestMapping("/api/storage/config")
 @RequiredArgsConstructor
 public class StorageConfigController {
 

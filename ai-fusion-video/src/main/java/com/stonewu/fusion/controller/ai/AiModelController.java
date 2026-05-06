@@ -22,7 +22,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
 
 @Tag(name = "AI模型管理")
 @RestController
-@RequestMapping("/ai/model")
+@RequestMapping("/api/ai/model")
 @RequiredArgsConstructor
 public class AiModelController {
 

@@ -7,40 +7,40 @@ import type { LoginReqVO, LoginRespVO, UserRespVO, ProfileUpdateReq, ChangePassw
  * 登录
  */
 export function login(data: LoginReqVO): Promise<LoginRespVO> {
-  return http.post<never, LoginRespVO>("/auth/login", data);
+  return http.post<never, LoginRespVO>("/api/auth/login", data);
 }
 
 /**
  * 获取当前用户信息
  */
 export function getUserInfo(): Promise<UserRespVO> {
-  return http.get<never, UserRespVO>("/auth/user-info");
+  return http.get<never, UserRespVO>("/api/auth/user-info");
 }
 
 /**
  * 登出
  */
 export function logout(): Promise<boolean> {
-  return http.post<never, boolean>("/auth/logout");
+  return http.post<never, boolean>("/api/auth/logout");
 }
 
 /**
  * 使用 refresh_token 刷新令牌
  */
 export function refreshToken(refreshToken: string): Promise<LoginRespVO> {
-  return http.post<never, LoginRespVO>("/auth/refresh", { refreshToken });
+  return http.post<never, LoginRespVO>("/api/auth/refresh", { refreshToken });
 }
 
 /**
  * 更新个人资料
  */
 export function updateProfile(data: ProfileUpdateReq): Promise<boolean> {
-  return http.put<never, boolean>("/auth/profile", data);
+  return http.put<never, boolean>("/api/auth/profile", data);
 }
 
 /**
  * 修改密码
  */
 export function changePassword(data: ChangePasswordReq): Promise<boolean> {
-  return http.put<never, boolean>("/auth/change-password", data);
+  return http.put<never, boolean>("/api/auth/change-password", data);
 }

@@ -53,35 +53,35 @@ export const teamApi = {
   // ========== 团队 ==========
 
   /** 获取团队详情 */
-  get: (id: number) => http.get<never, Team>(`/team/get?id=${id}`),
+  get: (id: number) => http.get<never, Team>(`/api/team/get?id=${id}`),
 
   /** 创建团队 */
   create: (data: TeamCreateReq) =>
-    http.post<never, number>("/team/create", data),
+    http.post<never, number>("/api/team/create", data),
 
   /** 更新团队 */
   update: (data: TeamUpdateReq) =>
-    http.put<never, boolean>("/team/update", data),
+    http.put<never, boolean>("/api/team/update", data),
 
   /** 删除团队 */
   delete: (id: number) =>
-    http.delete<never, boolean>(`/team/delete?id=${id}`),
+    http.delete<never, boolean>(`/api/team/delete?id=${id}`),
 
   // ========== 成员管理 ==========
 
   /** 获取团队成员列表 */
   listMembers: (teamId: number) =>
-    http.get<never, TeamMember[]>(`/team/member/list?teamId=${teamId}`),
+    http.get<never, TeamMember[]>(`/api/team/member/list?teamId=${teamId}`),
 
   /** 添加团队成员 */
   addMember: (data: TeamMemberAddReq) =>
-    http.post<never, number>("/team/member/add", data),
+    http.post<never, number>("/api/team/member/add", data),
 
   /** 移除团队成员 */
   removeMember: (teamId: number, userId: number) =>
-    http.post<never, boolean>(`/team/member/remove?teamId=${teamId}&userId=${userId}`),
+    http.post<never, boolean>(`/api/team/member/remove?teamId=${teamId}&userId=${userId}`),
 
   /** 变更成员角色 */
   changeMemberRole: (teamId: number, userId: number, role: number) =>
-    http.post<never, boolean>(`/team/member/change-role?teamId=${teamId}&userId=${userId}&role=${role}`),
+    http.post<never, boolean>(`/api/team/member/change-role?teamId=${teamId}&userId=${userId}&role=${role}`),
 };

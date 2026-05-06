@@ -409,7 +409,21 @@ function SubAgentCard({
   const children = item.children ?? [];
   const isRunning = item.status === "calling";
   const hasChildren = children.length > 0;
-  const hasResult = !isRunning && !!item.result;
+  const lastContentChild = [...children]
+    .reverse()
+    .find(
+      (
+        child
+      ): child is Extract<SubTimelineItem, { type: "content" }> =>
+        child.type === "content"
+    );
+  const renderedResult =
+    !isRunning && item.result
+      ? lastContentChild?.text.trim() === item.result.trim()
+        ? null
+        : item.result
+      : null;
+  const hasResult = !!renderedResult;
   const hasContent = hasChildren || hasResult;
 
   // 子 Agent 内部智能自动滚动
@@ -530,10 +544,10 @@ function SubAgentCard({
                 return null;
               })}
 
-              {/* 子 Agent 最终执行结果（纯文本总结） */}
+              {/* 子 Agent 最终执行结果 */}
               {hasResult && (
-                <div className="text-xs text-foreground/70 leading-relaxed">
-                  {item.result}
+                <div className="text-xs leading-relaxed text-foreground/70">
+                  <XMarkdown content={renderedResult} />
                 </div>
               )}
             </div>
@@ -2114,7 +2128,9 @@ function HistoryDetailPanel({
     : messages;
 
   // 提取第一条 assistant 消息的 reasoning 信息
-  const firstAssistant = displayMessages.find((m) => m.role === "assistant" && m.reasoningContent);
+  const firstAssistant = displayMessages.find(
+    (m) => m.role === "assistant" && !m.parentToolCallId && m.reasoningContent
+  );
 
   // 转换为统一时间线格式
   const timeline = messagesToTimeline(displayMessages);

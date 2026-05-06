@@ -3,7 +3,7 @@ import type { CommonResult } from "./types";
 
 // 后端基础地址（可通过环境变量 NEXT_PUBLIC_API_BASE_URL 覆盖）
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:18080";
+  (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:18080").replace(/\/$/, "");
 
 // 创建 axios 实例
 const http = axios.create({
@@ -143,7 +143,7 @@ http.interceptors.response.use(
 
     try {
       // 调用刷新接口（直接用 axios 避免走拦截器死循环）
-      const refreshResp = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+      const refreshResp = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
         refreshToken: storedRefreshToken,
       });
 

@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Upload, Link, Images, X } from "lucide-react";
+import { Upload, Link, Images, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { resolveMediaUrl } from "@/lib/api/client";
+import { uploadFile } from "@/lib/api/storage";
 import { cn } from "@/lib/utils";
 
 interface ImageInputProps {
@@ -12,11 +14,11 @@ interface ImageInputProps {
   /** 预览区高度 class，默认 h-32 */
   previewHeight?: string;
   placeholder?: string;
+  uploadSubDir?: string;
 }
 
 /**
- * 图片输入组件：支持 URL 填写 / 本地文件预览 切换
- * 由于后端暂无上传接口，本地文件选择后转为 data URL 用于预览
+ * 图片输入组件：支持 URL 填写 / 本地文件上传 切换
  */
 export default function ImageInput({
   value,
@@ -24,30 +26,39 @@ export default function ImageInput({
   className,
   previewHeight = "h-32",
   placeholder = "粘贴图片链接...",
+  uploadSubDir = "images",
 }: ImageInputProps) {
   const [mode, setMode] = useState<"url" | "upload">("upload");
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      return;
+    }
+    try {
+      setUploading(true);
+      const uploadedUrl = await uploadFile(file, uploadSubDir);
+      onChange(uploadedUrl);
+    } catch (error) {
+      console.error("图片上传失败:", error);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      onChange(result);
-    };
-    reader.readAsDataURL(file);
+    void handleUpload(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      onChange(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    void handleUpload(file);
   };
 
   const handleClear = () => {
@@ -91,7 +102,7 @@ export default function ImageInput({
       {value ? (
         <div className={cn("relative rounded-lg overflow-hidden border border-border/20 bg-muted/10 group", previewHeight)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={value} alt="preview" className="w-full h-full object-cover" />
+          <img src={resolveMediaUrl(value) || ""} alt="preview" className="w-full h-full object-cover" />
           <button
             type="button"
             onClick={handleClear}
@@ -105,14 +116,21 @@ export default function ImageInput({
           className={cn(
             "rounded-lg border-2 border-dashed border-border/30 bg-muted/5 flex flex-col items-center justify-center cursor-pointer",
             "hover:border-primary/30 hover:bg-primary/5 transition-all",
+            uploading && "cursor-wait opacity-70",
             previewHeight
           )}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => !uploading && fileRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
         >
-          <Upload className="h-5 w-5 text-muted-foreground/30 mb-1.5" />
-          <p className="text-[10px] text-muted-foreground/40">点击或拖拽图片到此处</p>
+          {uploading ? (
+            <Loader2 className="h-5 w-5 text-muted-foreground/40 mb-1.5 animate-spin" />
+          ) : (
+            <Upload className="h-5 w-5 text-muted-foreground/30 mb-1.5" />
+          )}
+          <p className="text-[10px] text-muted-foreground/40">
+            {uploading ? "上传中..." : "点击或拖拽图片到此处"}
+          </p>
         </div>
       ) : (
         <div className={cn(
@@ -136,7 +154,7 @@ export default function ImageInput({
       {/* URL 输入框 */}
       {mode === "url" && (
         <Input
-          value={value.startsWith("data:") ? "" : value}
+          value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className="h-7 text-xs"

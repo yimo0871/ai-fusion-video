@@ -9,6 +9,7 @@ import { scriptApi } from "@/lib/api/script";
 interface ParseScriptDialogProps {
   open: boolean;
   projectId: number;
+  projectName?: string;
   /** "create" = 首次创建, "reparse" = 重新解析（需先删旧剧本） */
   mode?: "create" | "reparse";
   /** 重新解析模式下需传入旧剧本ID，由调用方负责删除 */
@@ -20,6 +21,7 @@ interface ParseScriptDialogProps {
 export function ParseScriptDialog({
   open,
   projectId,
+  projectName,
   mode = "create",
   onClose,
   onCreated,
@@ -30,6 +32,7 @@ export function ParseScriptDialog({
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
+    const resolvedTitle = title.trim() || projectName?.trim() || "未命名项目";
 
     if (!rawContent.trim()) {
       setError("请粘贴剧本原文");
@@ -40,10 +43,10 @@ export function ParseScriptDialog({
     try {
       const script = await scriptApi.create({
         projectId,
-        title: title.trim(),
+        title: resolvedTitle,
         rawContent: rawContent.trim(),
       });
-      const createdTitle = title.trim();
+      const createdTitle = resolvedTitle;
       setTitle("");
       setRawContent("");
       onCreated({ id: script.id, title: createdTitle });
@@ -104,7 +107,7 @@ export function ParseScriptDialog({
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="例如：三体"
+                    placeholder={projectName?.trim() ? `留空则使用：${projectName.trim()}` : "留空则使用项目名"}
                     className={cn(
                       "w-full px-3.5 py-2.5 rounded-xl text-sm",
                       "bg-muted/50 border border-border/40",

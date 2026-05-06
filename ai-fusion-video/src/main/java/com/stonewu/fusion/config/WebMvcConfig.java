@@ -15,7 +15,8 @@ import java.nio.file.Paths;
  * Web MVC 配置
  * <p>
  * 将 /media/** HTTP 路径映射到本地磁盘存储目录，
- * 使前端可以通过 HTTP 访问本地存储的图片和视频文件。
+ * 并将 /api/art-styles/** 映射到 classpath 中的默认画风参考图目录，
+ * 使前端和后端都可以通过统一 URL 访问这些资源。
  */
 @Configuration
 @RequiredArgsConstructor
@@ -29,6 +30,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/api/art-styles/**")
+            .addResourceLocations("classpath:/static/art-styles/");
+
         // 优先从数据库中获取默认本地存储配置的 basePath
         String basePath = localBasePath;
         try {

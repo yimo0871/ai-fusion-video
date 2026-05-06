@@ -93,6 +93,7 @@ public class AgentScopeAssistantService {
 
     private static final String CANCEL_FLAG_KEY = "fv:agent:cancel:";
     private static final Duration CANCEL_FLAG_TTL = Duration.ofHours(1);
+    private static final String MAIN_AGENT_ACCUMULATOR_KEY = "__main_agent__";
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是一个专业的AI视频创作助手，专注于帮助用户进行剧本编辑和分镜设计。
@@ -207,11 +208,8 @@ public class AgentScopeAssistantService {
             aiStreamRedisService.markActive(conversationId);
             AtomicReference<String> terminalStatus = new AtomicReference<>("running");
 
-            // 12. 用于累积主 Agent 的 REASONING 和 CONTENT 增量文本
-            StringBuilder reasoningAccumulator = new StringBuilder();
-            StringBuilder contentAccumulator = new StringBuilder();
-            // 记录思考耗时
-            long[] reasoningDuration = { 0L };
+            // 12. 按主/子 Agent 作用域累积 REASONING 和 CONTENT，供历史记录落库。
+            Map<String, AssistantMessageAccumulator> assistantAccumulators = new LinkedHashMap<>();
 
                 // 13. 创建事件合并累积器（用于 Replay List）
             StreamEventAccumulator accumulator = new StreamEventAccumulator(conversationId);
@@ -244,8 +242,7 @@ public class AgentScopeAssistantService {
                         }
 
                         // 持久化中间步骤到数据库
-                        persistStreamEvent(conversationId, event,
-                                reasoningAccumulator, contentAccumulator, reasoningDuration);
+                        persistStreamEvent(conversationId, event, assistantAccumulators);
                     })
                     .doOnComplete(() -> {
                         log.info("[AgentScope:stream] 事件流完成: {}", conversationId);
@@ -442,73 +439,71 @@ public class AgentScopeAssistantService {
      * 持久化策略：
      * - TOOL_CALL：保存工具调用开始记录（主 Agent 和子 Agent 的工具调用都保存）
      * - TOOL_FINISHED：保存工具调用结果
-     * - REASONING：累积思考文本（在 DONE 时随 assistant 消息一起保存）
-     * - CONTENT：累积回复文本（在 DONE 时保存为 assistant 消息）
-     * - DONE：保存累积的 assistant 消息（含 reasoning）
+     * - REASONING / CONTENT：按 parentToolCallId 维度累积主/子 Agent 输出
+     * - TOOL_CALL：在当前作用域切到工具前，先刷盘该作用域已累积的 assistant 消息
+     * - TOOL_FINISHED：主 Agent 的子 Agent 工具返回时，刷盘对应子 Agent 最后一段输出
+     * - DONE：保存主 Agent 最后一段累积消息（含 reasoning）
      */
     private void persistStreamEvent(String conversationId, AiChatStreamRespVO event,
-            StringBuilder reasoningAccumulator,
-            StringBuilder contentAccumulator,
-            long[] reasoningDuration) {
+            Map<String, AssistantMessageAccumulator> assistantAccumulators) {
         try {
             String outputType = event.getOutputType();
             if (outputType == null) {
                 return;
             }
 
-            // 是否为子 Agent 事件
-            boolean isSubAgent = StrUtil.isNotBlank(event.getParentToolCallId());
+            String parentToolCallId = event.getParentToolCallId();
+            String accumulatorKey = getAssistantAccumulatorKey(parentToolCallId);
+            AssistantMessageAccumulator accumulator = assistantAccumulators
+                    .computeIfAbsent(accumulatorKey, key -> new AssistantMessageAccumulator());
 
             switch (outputType) {
                 case "REASONING" -> {
-                    // 仅累积主 Agent 的思考文本（子 Agent 的 reasoning 不在主对话中保存）
-                    if (!isSubAgent && StrUtil.isNotBlank(event.getReasoningContent())) {
-                        reasoningAccumulator.append(event.getReasoningContent());
+                    if (StrUtil.isNotBlank(event.getReasoningContent())) {
+                        accumulator.appendReasoning(event.getReasoningContent());
                     }
                 }
 
                 case "CONTENT" -> {
-                    // 记录思考耗时
-                    if (!isSubAgent && event.getReasoningDurationMs() != null) {
-                        reasoningDuration[0] = event.getReasoningDurationMs();
+                    if (event.getReasoningDurationMs() != null) {
+                        accumulator.setReasoningDurationMs(event.getReasoningDurationMs());
                     }
-                    // 累积主 Agent 的内容文本（保留空白字符，仅跳过 null/空串）
-                    if (!isSubAgent && StrUtil.isNotEmpty(event.getContent())) {
-                        contentAccumulator.append(event.getContent());
+                    if (StrUtil.isNotEmpty(event.getContent())) {
+                        accumulator.appendContent(event.getContent());
                     }
                 }
 
                 case "TOOL_CALL" -> {
-                    // 工具调用前，先将已累积的模型输出保存为 assistant 消息
-                    // 这样 ReAct 循环中每次工具调用前的中间思考和输出都会被记录
-                    if (!isSubAgent) {
-                        flushAssistantMessage(conversationId, reasoningAccumulator,
-                                contentAccumulator, reasoningDuration);
-                    }
+                    flushAssistantMessage(conversationId, assistantAccumulators,
+                            accumulatorKey, parentToolCallId, false);
                     // 保存每个工具调用的发起记录（status=running）
                     if (event.getToolCalls() != null) {
                         for (AiChatStreamRespVO.ToolCallVO tc : event.getToolCalls()) {
                             messageService.saveToolCall(conversationId, tc.getName(),
                                     "running", tc.getArguments(),
-                                    tc.getId(), event.getParentToolCallId());
+                                    tc.getId(), parentToolCallId);
                         }
                     }
                 }
 
                 case "TOOL_FINISHED" -> {
+                    if (StrUtil.isBlank(parentToolCallId)) {
+                        flushAssistantMessage(conversationId, assistantAccumulators,
+                                getAssistantAccumulatorKey(event.getToolCallId()),
+                                event.getToolCallId(), true);
+                    }
                     // 保存工具调用结果（status=success/error）
                     if (StrUtil.isNotBlank(event.getToolName())) {
                         String status = "error".equals(event.getToolStatus()) ? "error" : "success";
                         messageService.saveToolCall(conversationId, event.getToolName(),
                                 status, event.getToolResult(),
-                                event.getToolCallId(), event.getParentToolCallId());
+                                event.getToolCallId(), parentToolCallId);
                     }
                 }
 
                 case "DONE" -> {
-                    // 保存最后一段累积的 assistant 消息（含 reasoning）
-                    flushAssistantMessage(conversationId, reasoningAccumulator,
-                            contentAccumulator, reasoningDuration);
+                    flushAssistantMessage(conversationId, assistantAccumulators,
+                            accumulatorKey, parentToolCallId, false);
                 }
 
                 default -> {
@@ -527,23 +522,72 @@ public class AgentScopeAssistantService {
      * 如果累积内容为空则跳过，不生成空消息。
      */
     private void flushAssistantMessage(String conversationId,
-            StringBuilder reasoningAccumulator,
-            StringBuilder contentAccumulator,
-            long[] reasoningDuration) {
-        String content = contentAccumulator.toString();
-        String reasoning = reasoningAccumulator.length() > 0
-                ? reasoningAccumulator.toString()
-                : null;
-        Long duration = reasoningDuration[0] > 0 ? reasoningDuration[0] : null;
-
-        if (StrUtil.isNotEmpty(content) || reasoning != null) {
-            messageService.saveAssistantMessage(conversationId, content, reasoning, duration);
+            Map<String, AssistantMessageAccumulator> assistantAccumulators,
+            String accumulatorKey,
+            String parentToolCallId,
+            boolean removeAfterFlush) {
+        AssistantMessageAccumulator accumulator = assistantAccumulators.get(accumulatorKey);
+        if (accumulator == null) {
+            return;
         }
 
-        // 清空累积器，为下一段输出做准备
-        contentAccumulator.setLength(0);
-        reasoningAccumulator.setLength(0);
-        reasoningDuration[0] = 0L;
+        String content = accumulator.getContent();
+        String reasoning = accumulator.getReasoningContent();
+        Long duration = accumulator.getReasoningDurationMs();
+
+        if (StrUtil.isNotEmpty(content) || reasoning != null) {
+            messageService.saveAssistantMessage(conversationId, content, reasoning,
+                    duration, parentToolCallId);
+        }
+
+        if (removeAfterFlush) {
+            assistantAccumulators.remove(accumulatorKey);
+        } else {
+            accumulator.clear();
+        }
+    }
+
+    private String getAssistantAccumulatorKey(String parentToolCallId) {
+        return StrUtil.blankToDefault(parentToolCallId, MAIN_AGENT_ACCUMULATOR_KEY);
+    }
+
+    private static class AssistantMessageAccumulator {
+
+        private final StringBuilder reasoning = new StringBuilder();
+        private final StringBuilder content = new StringBuilder();
+        private Long reasoningDurationMs;
+
+        void appendReasoning(String reasoningContent) {
+            reasoning.append(reasoningContent);
+        }
+
+        void appendContent(String contentText) {
+            content.append(contentText);
+        }
+
+        void setReasoningDurationMs(Long durationMs) {
+            if (durationMs != null && durationMs > 0) {
+                this.reasoningDurationMs = durationMs;
+            }
+        }
+
+        String getContent() {
+            return content.length() > 0 ? content.toString() : null;
+        }
+
+        String getReasoningContent() {
+            return reasoning.length() > 0 ? reasoning.toString() : null;
+        }
+
+        Long getReasoningDurationMs() {
+            return reasoningDurationMs;
+        }
+
+        void clear() {
+            reasoning.setLength(0);
+            content.setLength(0);
+            reasoningDurationMs = null;
+        }
     }
 
     // ========== 私有方法 ==========

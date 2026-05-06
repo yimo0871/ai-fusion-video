@@ -19,10 +19,12 @@ import { EmptyState } from "./_components/empty-state";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { useProject } from "../project-context";
 
 export default function ScriptTabPage() {
   const params = useParams();
   const projectId = Number(params.id);
+  const { project } = useProject();
 
   const [loading, setLoading] = useState(true);
   const [script, setScript] = useState<Script | null>(null);
@@ -128,6 +130,34 @@ export default function ScriptTabPage() {
       loadScript();
     }
   }, [scriptsInvalidation, loadScript]);
+
+  const handleAiScriptCreated = useCallback(
+    (createdScript: { id: number; title: string }) => {
+      const scriptDisplayTitle =
+        createdScript.title?.trim() || project?.name?.trim() || "未命名项目";
+
+      loadScript();
+
+      const pipelineId = addPipeline({
+        label: `AI 生成剧本 - ${scriptDisplayTitle}`,
+        projectId,
+        request: {
+          agentType: "script_full_parse",
+          category: "pipeline",
+          title: `AI 剧本解析：${scriptDisplayTitle}`,
+          projectId,
+          context: { scriptId: createdScript.id },
+        },
+        onComplete: () => {
+          loadScript();
+        },
+      });
+
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    },
+    [addPipeline, loadScript, project?.name, projectId, setExpandedTaskId, setPanelExpanded]
+  );
 
   // ========== 导航操作 ==========
 
@@ -452,6 +482,7 @@ export default function ScriptTabPage() {
       <>
         <EmptyState
           projectId={projectId}
+          projectName={project?.name}
           showCreateDialog={showCreateDialog}
           onShowCreateDialog={setShowCreateDialog}
           onCreated={loadScript}
@@ -460,8 +491,9 @@ export default function ScriptTabPage() {
         <ParseScriptDialog
           open={showParseDialog}
           projectId={projectId}
+          projectName={project?.name}
           onClose={() => setShowParseDialog(false)}
-          onCreated={loadScript}
+          onCreated={handleAiScriptCreated}
         />
       </>
     );

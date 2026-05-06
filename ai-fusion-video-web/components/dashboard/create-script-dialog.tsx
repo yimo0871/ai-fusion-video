@@ -9,6 +9,7 @@ import { scriptApi, type ScriptCreateReq } from "@/lib/api/script";
 interface CreateScriptDialogProps {
   open: boolean;
   projectId: number;
+  projectName?: string;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -16,6 +17,7 @@ interface CreateScriptDialogProps {
 export function CreateScriptDialog({
   open,
   projectId,
+  projectName,
   onClose,
   onCreated,
 }: CreateScriptDialogProps) {
@@ -24,13 +26,14 @@ export function CreateScriptDialog({
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
+    const resolvedTitle = title.trim() || projectName?.trim() || "未命名项目";
 
     setLoading(true);
     setError("");
     try {
       const data: ScriptCreateReq = {
         projectId,
-        title: title.trim(),
+        title: resolvedTitle,
       };
       await scriptApi.create(data);
       setTitle("");
@@ -81,7 +84,7 @@ export function CreateScriptDialog({
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="例如：三体"
+                    placeholder={projectName?.trim() ? `留空则使用：${projectName.trim()}` : "留空则使用项目名"}
                     className={cn(
                       "w-full px-3.5 py-2.5 rounded-xl text-sm",
                       "bg-muted/50 border border-border/40",

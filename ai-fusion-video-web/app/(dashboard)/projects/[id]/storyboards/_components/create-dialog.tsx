@@ -8,11 +8,13 @@ import { storyboardApi } from "@/lib/api/storyboard";
 export function CreateStoryboardDialog({
   open,
   projectId,
+  projectName,
   onClose,
   onCreated,
 }: {
   open: boolean;
   projectId: number;
+  projectName?: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -21,16 +23,14 @@ export function CreateStoryboardDialog({
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      setError("请输入分镜标题");
-      return;
-    }
+    const resolvedTitle = title.trim() || projectName?.trim() || "未命名项目";
+
     setLoading(true);
     setError("");
     try {
       await storyboardApi.create({
         projectId,
-        title: title.trim(),
+        title: resolvedTitle,
       });
       setTitle("");
       onCreated();
@@ -64,13 +64,13 @@ export function CreateStoryboardDialog({
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">
-                分镜标题 <span className="text-destructive">*</span>
+                分镜标题
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="例如：第一集分镜"
+                placeholder={projectName?.trim() ? `留空则使用：${projectName.trim()}` : "留空则使用项目名"}
                 className={cn(
                   "w-full px-3.5 py-2.5 rounded-xl text-sm",
                   "bg-muted/50 border border-border/40",

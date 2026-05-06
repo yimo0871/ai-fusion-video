@@ -27,7 +27,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
  */
 @Tag(name = "系统初始化")
 @RestController
-@RequestMapping("/system/init")
+@RequestMapping("/api/system/init")
 @RequiredArgsConstructor
 public class SystemInitController {
 

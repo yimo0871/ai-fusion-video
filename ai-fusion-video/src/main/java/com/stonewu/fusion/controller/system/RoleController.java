@@ -20,7 +20,7 @@ import static com.stonewu.fusion.common.CommonResult.success;
 
 @Tag(name = "角色管理")
 @RestController
-@RequestMapping("/system/role")
+@RequestMapping("/api/system/role")
 @RequiredArgsConstructor
 public class RoleController {
 

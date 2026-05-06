@@ -9,6 +9,7 @@ import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.generation.ImageGenerationService;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -31,7 +32,8 @@ import static org.mockito.Mockito.when;
 class OpenAiImageStrategyTests {
 
     private HttpServer server;
-        private final StorageConfigService storageConfigService = mock(StorageConfigService.class);
+                private final StorageConfigService storageConfigService = mock(StorageConfigService.class);
+                private final PresetArtStyleResourceResolver presetArtStyleResourceResolver = new PresetArtStyleResourceResolver();
 
         @Test
         void getNameUsesOpenAiCompatiblePlatformKey() {
@@ -40,7 +42,8 @@ class OpenAiImageStrategyTests {
                                 mock(AiModelService.class),
                                 mock(ModelPresetService.class),
                                 mock(MediaStorageService.class),
-                                storageConfigService
+                                storageConfigService,
+                                presetArtStyleResourceResolver
                 );
 
                 assertThat(strategy.getName()).isEqualTo("openai_compatible");
@@ -73,7 +76,8 @@ class OpenAiImageStrategyTests {
                 mock(AiModelService.class),
                 mock(ModelPresetService.class),
                 mock(MediaStorageService.class),
-                storageConfigService
+                storageConfigService,
+                presetArtStyleResourceResolver
         );
         ApiConfig apiConfig = ApiConfig.builder()
                 .platform("openai_compatible")
@@ -110,7 +114,8 @@ class OpenAiImageStrategyTests {
                 mock(AiModelService.class),
                 mock(ModelPresetService.class),
                 mediaStorageService,
-                storageConfigService
+                storageConfigService,
+                presetArtStyleResourceResolver
         );
         ApiConfig apiConfig = ApiConfig.builder()
                 .platform("openai")
@@ -156,7 +161,8 @@ class OpenAiImageStrategyTests {
                 mock(AiModelService.class),
                 modelPresetService,
                 mock(MediaStorageService.class),
-                storageConfigService
+                storageConfigService,
+                presetArtStyleResourceResolver
         );
         ApiConfig apiConfig = ApiConfig.builder()
                 .platform("openai_compatible")
@@ -205,7 +211,8 @@ class OpenAiImageStrategyTests {
                 aiModelService,
                 mock(ModelPresetService.class),
                 mediaStorageService,
-                storageConfigService
+                storageConfigService,
+                presetArtStyleResourceResolver
         );
         ApiConfig apiConfig = ApiConfig.builder()
                 .platform("openai")
@@ -265,7 +272,8 @@ class OpenAiImageStrategyTests {
                 mock(AiModelService.class),
                 mock(ModelPresetService.class),
                 mediaStorageService,
-                storageConfigService
+                storageConfigService,
+                presetArtStyleResourceResolver
         );
         ApiConfig apiConfig = ApiConfig.builder()
                 .platform("openai")
@@ -291,6 +299,58 @@ class OpenAiImageStrategyTests {
         assertThat(requestBody.get()).contains("gpt-image-1");
         assertThat(requestBody.get()).contains("name=\"prompt\"");
         assertThat(requestBody.get()).contains("edit this image");
+        verify(mediaStorageService).storeBytes(generatedBytes, "images", "png");
+    }
+
+    @Test
+    void generateUsesLocalPresetArtStyleReferenceWithoutHttpDownload() throws Exception {
+        byte[] generatedBytes = "edited-from-preset".getBytes(StandardCharsets.UTF_8);
+        String base64Image = Base64.getEncoder().encodeToString(generatedBytes);
+        AtomicReference<String> requestPath = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/images/edits", exchange -> {
+            requestPath.set(exchange.getRequestURI().getPath());
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1));
+            writeJson(exchange, 200, """
+                    {"data":[{"b64_json":"%s"}],"output_format":"png"}
+                    """.formatted(base64Image));
+        });
+        server.start();
+
+        MediaStorageService mediaStorageService = mock(MediaStorageService.class);
+        when(mediaStorageService.storeBytes(any(), eq("images"), eq("png")))
+                .thenReturn("/media/images/preset-edited.png");
+
+        OpenAiImageStrategy strategy = new OpenAiImageStrategy(
+                mock(ImageGenerationService.class),
+                mock(AiModelService.class),
+                mock(ModelPresetService.class),
+                mediaStorageService,
+                storageConfigService,
+                presetArtStyleResourceResolver
+        );
+        ApiConfig apiConfig = ApiConfig.builder()
+                .platform("openai")
+                .apiUrl("http://localhost:" + server.getAddress().getPort())
+                .apiKey("test-key")
+                .build();
+
+        List<String> urls = strategy.generate(
+                "edit with preset",
+                "gpt-image-1",
+                1024,
+                1024,
+                1,
+                List.of("/art-styles/anime_jp.jpg"),
+                apiConfig
+        );
+
+        assertThat(urls).containsExactly("/media/images/preset-edited.png");
+        assertThat(requestPath.get()).isEqualTo("/v1/images/edits");
+        assertThat(requestBody.get()).contains("name=\"image[]\"");
+                assertThat(requestBody.get()).contains("filename=\"reference-1.jpg\"");
         verify(mediaStorageService).storeBytes(generatedBytes, "images", "png");
     }
 
@@ -333,7 +393,8 @@ class OpenAiImageStrategyTests {
                 mock(AiModelService.class),
                 modelPresetService,
                 mock(MediaStorageService.class),
-                storageConfigService
+                storageConfigService,
+                presetArtStyleResourceResolver
         );
         ApiConfig apiConfig = ApiConfig.builder()
                 .platform("openai_compatible")

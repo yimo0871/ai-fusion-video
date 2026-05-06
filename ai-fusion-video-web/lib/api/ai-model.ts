@@ -199,14 +199,14 @@ export const PLATFORM_LABELS: Record<string, string> = {
 
 export const aiModelApi = {
   /** 获取 AI 模型详情 */
-  get: (id: number) => http.get<never, AiModel>(`/ai/model/get?id=${id}`),
+  get: (id: number) => http.get<never, AiModel>(`/api/ai/model/get?id=${id}`),
 
   /** 获取启用的 AI 模型列表 */
-  list: () => http.get<never, AiModel[]>("/ai/model/list"),
+  list: () => http.get<never, AiModel[]>("/api/ai/model/list"),
 
   /** 按类型获取 AI 模型列表 */
   listByType: (type: number) =>
-    http.get<never, AiModel[]>(`/ai/model/list-by-type?type=${type}`),
+    http.get<never, AiModel[]>(`/api/ai/model/list-by-type?type=${type}`),
 
   /** AI 模型分页列表 */
   page: (params: AiModelPageReq) => {
@@ -217,34 +217,34 @@ export const aiModelApi = {
     if (params.status !== undefined) query.set("status", String(params.status));
     query.set("pageNo", String(params.pageNo ?? 1));
     query.set("pageSize", String(params.pageSize ?? 10));
-    return http.get<never, PageResult<AiModel>>(`/ai/model/page?${query.toString()}`);
+    return http.get<never, PageResult<AiModel>>(`/api/ai/model/page?${query.toString()}`);
   },
 
   /** 创建 AI 模型 */
   create: (data: AiModelCreateReq) =>
-    http.post<never, number>("/ai/model/create", data),
+    http.post<never, number>("/api/ai/model/create", data),
 
   /** 更新 AI 模型 */
   update: (data: AiModelUpdateReq) =>
-    http.put<never, boolean>("/ai/model/update", data),
+    http.put<never, boolean>("/api/ai/model/update", data),
 
   /** 删除 AI 模型 */
   delete: (id: number) =>
-    http.delete<never, boolean>(`/ai/model/delete?id=${id}`),
+    http.delete<never, boolean>(`/api/ai/model/delete?id=${id}`),
 
   /** 获取模型预设列表 */
   presets: (type?: number) =>
     http.get<never, ModelPreset[]>(
-      type !== undefined ? `/ai/model/presets?type=${type}` : `/ai/model/presets`
+      type !== undefined ? `/api/ai/model/presets?type=${type}` : `/api/ai/model/presets`
     ),
 };
 
 export const apiConfigApi = {
   /** 获取 API 配置详情 */
-  get: (id: number) => http.get<never, ApiConfig>(`/ai/api-config/get?id=${id}`),
+  get: (id: number) => http.get<never, ApiConfig>(`/api/ai/api-config/get?id=${id}`),
 
   /** 获取启用的 API 配置列表 */
-  list: () => http.get<never, ApiConfig[]>("/ai/api-config/list"),
+  list: () => http.get<never, ApiConfig[]>("/api/ai/api-config/list"),
 
   /** API 配置分页列表 */
   page: (params: ApiConfigPageReq) => {
@@ -254,22 +254,22 @@ export const apiConfigApi = {
     if (params.status !== undefined) query.set("status", String(params.status));
     query.set("pageNo", String(params.pageNo ?? 1));
     query.set("pageSize", String(params.pageSize ?? 10));
-    return http.get<never, PageResult<ApiConfig>>(`/ai/api-config/page?${query.toString()}`);
+    return http.get<never, PageResult<ApiConfig>>(`/api/ai/api-config/page?${query.toString()}`);
   },
 
   /** 创建 API 配置 */
   create: (data: ApiConfigSaveReq) =>
-    http.post<never, number>("/ai/api-config/create", data),
+    http.post<never, number>("/api/ai/api-config/create", data),
 
   /** 更新 API 配置 */
   update: (data: ApiConfigSaveReq) =>
-    http.put<never, boolean>("/ai/api-config/update", data),
+    http.put<never, boolean>("/api/ai/api-config/update", data),
 
   /** 删除 API 配置 */
   delete: (id: number) =>
-    http.delete<never, boolean>(`/ai/api-config/delete?id=${id}`),
+    http.delete<never, boolean>(`/api/ai/api-config/delete?id=${id}`),
 
   /** 获取远程可用模型列表 */
   remoteModels: (id: number) =>
-    http.get<never, RemoteModel[]>(`/ai/api-config/remote-models?id=${id}`),
+    http.get<never, RemoteModel[]>(`/api/ai/api-config/remote-models?id=${id}`),
 };

@@ -309,20 +309,38 @@ public class ImageGenerationConsumer {
             return null;
         }
 
+        ImageGenerationStrategy strategy = resolveStrategyByName(map, platform);
+        if (strategy != null) {
+            return strategy;
+        }
+
         String normalizedPlatform = "openai".equalsIgnoreCase(platform)
                 ? "openai_compatible"
                 : platform.toLowerCase(Locale.ROOT);
 
-        ImageGenerationStrategy strategy = map.get(normalizedPlatform);
+        strategy = resolveStrategyByName(map, normalizedPlatform);
         if (strategy != null) {
             return strategy;
         }
 
         return switch (normalizedPlatform) {
-            case "openai_compatible" -> map.get("openai");
-            case "vertexai" -> map.get("vertex_ai");
+            case "openai_compatible" -> resolveStrategyByName(map, "openai");
+            case "vertexai" -> resolveStrategyByName(map, "vertex_ai");
             default -> null;
         };
+    }
+
+    private ImageGenerationStrategy resolveStrategyByName(Map<String, ImageGenerationStrategy> map, String name) {
+        ImageGenerationStrategy strategy = map.get(name);
+        if (strategy != null) {
+            return strategy;
+        }
+
+        return map.entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     @PreDestroy
