@@ -440,8 +440,8 @@ public class StreamingEventHook implements Hook {
     private void emitReasoningEvent(String agentName, String agentKey, String parentCallId,
             String reasoningText, String sourceType) {
         reasoningStartTimes.putIfAbsent(agentKey, System.currentTimeMillis());
-        log.debug("[StreamingEventHook] 思考增量: agent={}, parentCallId={}, sourceType={}, content={}",
-                agentName, parentCallId, sourceType, reasoningText);
+        // log.debug("[StreamingEventHook] 思考增量: agent={}, parentCallId={}, sourceType={}, content={}",
+        //         agentName, parentCallId, sourceType, reasoningText);
 
         emitEvent(new AiChatStreamRespVO()
                 .setMessageId(messageId)
