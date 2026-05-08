@@ -79,9 +79,8 @@ public class AssetController {
                                                       @RequestParam(defaultValue = "1") int page,
                                                       @RequestParam(defaultValue = "20") int size) {
         Long userId = SecurityUtils.getCurrentUserId();
-        IPage<Asset> pageResult = assetService.pageByUser(userId, projectId, type, keyword, page, size);
-        // 统计各类型数量：始终反映用户全局数据，不受筛选条件影响
-        Map<String, Long> typeCounts = assetService.countByUserGroupByType(userId, null, null);
+        IPage<Asset> pageResult = assetService.pageAccessibleByUser(userId, projectId, type, keyword, page, size);
+        Map<String, Long> typeCounts = assetService.countAccessibleByUserGroupByType(userId, null, null);
         return CommonResult.success(Map.of(
                 "records", pageResult.getRecords(),
                 "total", pageResult.getTotal(),
@@ -95,10 +94,8 @@ public class AssetController {
     @PostMapping
     public CommonResult<Asset> create(@Valid @RequestBody AssetCreateReqVO reqVO) {
         Asset asset = AssetConvert.INSTANCE.convert(reqVO);
-        // userId / ownerType / ownerId 由后端决定
+        // userId 由后端决定，owner 归属由 service 按当前团队绑定
         asset.setUserId(SecurityUtils.getCurrentUserId());
-        asset.setOwnerId(SecurityUtils.getCurrentUserId());
-        asset.setOwnerType(1);
         return CommonResult.success(assetService.create(asset));
     }
 

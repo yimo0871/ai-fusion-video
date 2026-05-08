@@ -10,6 +10,8 @@ import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
+import com.stonewu.fusion.security.SecurityUtils;
+import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -31,6 +33,7 @@ public class ScriptService {
     private final ScriptMapper scriptMapper;
     private final ScriptEpisodeMapper episodeMapper;
     private final ScriptSceneItemMapper sceneItemMapper;
+    private final TeamService teamService;
 
     // ========== 剧本 ==========
 
@@ -61,6 +64,7 @@ public class ScriptService {
         if (!existing.isEmpty()) {
             throw new BusinessException("该项目已有剧本，一个项目只能有一个总剧本");
         }
+        applyCurrentTeamOwnership(script);
         scriptMapper.insert(script);
         return script;
     }
@@ -178,6 +182,16 @@ public class ScriptService {
             throw new BusinessException("更新失败，数据已被其他操作修改，请刷新后重试");
         }
         return existing;
+    }
+
+    private void applyCurrentTeamOwnership(Script script) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            return;
+        }
+        TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(currentUserId);
+        script.setOwnerType(ownerScope.getOwnerType());
+        script.setOwnerId(ownerScope.getOwnerId());
     }
 
     @CacheEvict(value = "scene", allEntries = true)

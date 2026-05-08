@@ -6,6 +6,7 @@ import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
 import com.stonewu.fusion.mapper.project.ProjectMapper;
 import com.stonewu.fusion.mapper.project.ProjectMemberMapper;
+import com.stonewu.fusion.service.team.TeamService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceTests {
@@ -32,6 +34,9 @@ class ProjectServiceTests {
 
     @Mock
     private AssetItemMapper assetItemMapper;
+
+    @Mock
+    private TeamService teamService;
 
     @InjectMocks
     private ProjectService projectService;
@@ -65,6 +70,35 @@ class ProjectServiceTests {
         verify(projectMapper).updateById(projectCaptor.capture());
         assertThat(projectCaptor.getValue().getCoverUrl()).isEqualTo("https://example.com/project-cover.png");
         assertThat(projectCaptor.getValue().getArtStyleImageUrl()).isEqualTo("/media/images/style.png");
+    }
+
+    @Test
+    void listAccessibleByUserUsesCurrentTeamScope() {
+        when(teamService.getCurrentTeamIdByUser(9L)).thenReturn(5L);
+        when(teamService.listMemberUserIds(5L)).thenReturn(java.util.List.of(9L, 10L));
+        when(projectMapper.selectList(any())).thenReturn(java.util.List.of());
+
+        projectService.listAccessibleByUser(9L);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>> wrapperCaptor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class);
+        verify(projectMapper).selectList(wrapperCaptor.capture());
+        verify(teamService).getCurrentTeamIdByUser(9L);
+        verify(teamService).listMemberUserIds(5L);
+    }
+
+    @Test
+    void canAccessProjectAllowsCurrentTeamPersonalProject() {
+        when(projectMapper.selectById(11L)).thenReturn(Project.builder()
+                .id(11L)
+                .ownerType(1)
+                .ownerId(10L)
+                .build());
+        when(memberMapper.exists(any())).thenReturn(false);
+        when(teamService.getCurrentTeamIdByUser(9L)).thenReturn(5L);
+        when(teamService.listMemberUserIds(5L)).thenReturn(java.util.List.of(9L, 10L));
+
+        assertThat(projectService.canAccessProject(11L, 9L)).isTrue();
     }
 
     private static String dataUrl(String mimeType) {

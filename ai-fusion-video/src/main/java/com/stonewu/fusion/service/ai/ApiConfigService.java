@@ -7,8 +7,10 @@ import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.ApiConfigMapper;
+import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,8 @@ import java.util.List;
 public class ApiConfigService {
 
     private final ApiConfigMapper apiConfigMapper;
+    private final ObjectProvider<ChatModelFactory> chatModelFactoryProvider;
+    private final ObjectProvider<AgentScopeModelFactory> agentScopeModelFactoryProvider;
 
     @Transactional
     public Long createApiConfig(ApiConfig apiConfig) {
@@ -58,11 +62,13 @@ public class ApiConfigService {
         if (remark != null) config.setRemark(remark);
         normalizeProxyConfig(config);
         apiConfigMapper.updateById(config);
+        evictModelCaches();
     }
 
     @Transactional
     public void deleteApiConfig(Long id) {
         apiConfigMapper.deleteById(id);
+        evictModelCaches();
     }
 
     public ApiConfig getById(Long id) {
@@ -172,5 +178,16 @@ public class ApiConfigService {
             case "ollama" -> "http://localhost:11434";
             default -> null;
         };
+    }
+
+    private void evictModelCaches() {
+        ChatModelFactory chatModelFactory = chatModelFactoryProvider.getIfAvailable();
+        if (chatModelFactory != null) {
+            chatModelFactory.evictAll();
+        }
+        AgentScopeModelFactory agentScopeModelFactory = agentScopeModelFactoryProvider.getIfAvailable();
+        if (agentScopeModelFactory != null) {
+            agentScopeModelFactory.evictAll();
+        }
     }
 }

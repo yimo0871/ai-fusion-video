@@ -25,6 +25,7 @@ export type OutputType =
   | "CONTENT"
   | "TOOL_CALL"
   | "TOOL_FINISHED"
+  | "SUB_AGENT_FINISHED"
   | "DONE"
   | "ERROR"
   | "CANCELLED";

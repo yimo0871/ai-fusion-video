@@ -12,7 +12,6 @@ import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.script.ScriptService;
-import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -50,9 +49,6 @@ public class ScriptController {
     @PostMapping
     public CommonResult<Script> create(@Valid @RequestBody ScriptCreateReqVO reqVO) {
         Script script = ScriptConvert.INSTANCE.convert(reqVO);
-        // ownerId 和 ownerType 由后端决定，不信任前端传值，当前固定个人版
-        script.setOwnerId(SecurityUtils.getCurrentUserId());
-        script.setOwnerType(1);
         return CommonResult.success(scriptService.create(script));
     }
 

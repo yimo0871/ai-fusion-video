@@ -21,16 +21,40 @@ public class SecurityUserDetails implements UserDetails {
     private final String username;
     private final String password;
     private final Integer status;
+    private final Long currentTeamId;
     private final Collection<? extends GrantedAuthority> authorities;
 
+    public SecurityUserDetails(Long userId,
+            String username,
+            String password,
+            Integer status,
+            Long currentTeamId,
+            Collection<? extends GrantedAuthority> authorities) {
+        this.userId = userId;
+        this.username = username;
+        this.password = password;
+        this.status = status;
+        this.currentTeamId = currentTeamId;
+        this.authorities = authorities;
+    }
+
     public SecurityUserDetails(User user, List<Role> roles) {
+        this(user, roles, null);
+    }
+
+    public SecurityUserDetails(User user, List<Role> roles, Long currentTeamId) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.password = user.getPassword();
         this.status = user.getStatus();
+        this.currentTeamId = currentTeamId;
         this.authorities = roles.stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getCode().toUpperCase()))
                 .collect(Collectors.toList());
+    }
+
+    public SecurityUserDetails withCurrentTeamId(Long teamId) {
+        return new SecurityUserDetails(userId, username, password, status, teamId, authorities);
     }
 
     @Override

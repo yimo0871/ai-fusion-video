@@ -10,6 +10,9 @@ import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
+import com.stonewu.fusion.security.SecurityUtils;
+import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -27,8 +30,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AssetService {
 
+    private static final int OWNER_TYPE_TEAM = 2;
+
     private final AssetMapper assetMapper;
     private final AssetItemMapper assetItemMapper;
+    private final ProjectService projectService;
+    private final TeamService teamService;
 
     // ========== 资产 ==========
 
@@ -87,6 +94,11 @@ public class AssetService {
         return assetMapper.selectPage(new Page<>(page, size), wrapper);
     }
 
+    public IPage<Asset> pageAccessibleByUser(Long userId, Long projectId, String type, String keyword, int page, int size) {
+        LambdaQueryWrapper<Asset> wrapper = buildAccessibleQueryWrapper(userId, projectId, type, keyword);
+        return assetMapper.selectPage(new Page<>(page, size), wrapper);
+    }
+
     /**
      * 统计当前用户各类型资产数量（按 projectId / keyword 过滤，不按 type 过滤）
      * 返回 Map: type -> count
@@ -99,9 +111,67 @@ public class AssetService {
                 Collectors.groupingBy(Asset::getType, Collectors.counting()));
     }
 
+    public Map<String, Long> countAccessibleByUserGroupByType(Long userId, Long projectId, String keyword) {
+        LambdaQueryWrapper<Asset> wrapper = buildAccessibleQueryWrapper(userId, projectId, null, keyword);
+        List<Asset> all = assetMapper.selectList(
+                wrapper.select(Asset::getType));
+        return all.stream().collect(
+                Collectors.groupingBy(Asset::getType, Collectors.counting()));
+    }
+
+    public boolean canAccessAsset(Long assetId, Long userId) {
+        return canAccessAsset(getById(assetId), userId);
+    }
+
+    public boolean canAccessAsset(Asset asset, Long userId) {
+        if (asset == null) {
+            return false;
+        }
+        if (userId.equals(asset.getUserId()) || userId.equals(asset.getOwnerId())) {
+            return true;
+        }
+        if (asset.getProjectId() != null) {
+            return projectService.canAccessProject(asset.getProjectId(), userId);
+        }
+        Long currentTeamId = teamService.getCurrentTeamIdByUser(userId);
+        if (currentTeamId == null) {
+            return false;
+        }
+        if (OWNER_TYPE_TEAM == asset.getOwnerType() && currentTeamId.equals(asset.getOwnerId())) {
+            return true;
+        }
+        return teamService.listMemberUserIds(currentTeamId).contains(asset.getUserId());
+    }
+
     private LambdaQueryWrapper<Asset> buildUserQueryWrapper(Long userId, Long projectId, String type, String keyword) {
         LambdaQueryWrapper<Asset> wrapper = new LambdaQueryWrapper<Asset>()
                 .eq(Asset::getUserId, userId)
+                .orderByDesc(Asset::getUpdateTime);
+        if (projectId != null) {
+            wrapper.eq(Asset::getProjectId, projectId);
+        }
+        if (StrUtil.isNotBlank(type)) {
+            wrapper.eq(Asset::getType, type);
+        }
+        if (StrUtil.isNotBlank(keyword)) {
+            wrapper.like(Asset::getName, keyword.trim());
+        }
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<Asset> buildAccessibleQueryWrapper(Long userId, Long projectId, String type, String keyword) {
+        Long currentTeamId = teamService.getCurrentTeamIdByUser(userId);
+        if (currentTeamId == null) {
+            return buildUserQueryWrapper(userId, projectId, type, keyword);
+        }
+        List<Long> memberUserIds = teamService.listMemberUserIds(currentTeamId);
+        LambdaQueryWrapper<Asset> wrapper = new LambdaQueryWrapper<Asset>()
+                .and(scope -> scope
+                        .and(teamOwned -> teamOwned
+                                .eq(Asset::getOwnerType, OWNER_TYPE_TEAM)
+                    .eq(Asset::getOwnerId, currentTeamId))
+                        .or(memberOwned -> memberOwned
+                                .in(Asset::getUserId, memberUserIds)))
                 .orderByDesc(Asset::getUpdateTime);
         if (projectId != null) {
             wrapper.eq(Asset::getProjectId, projectId);
@@ -126,6 +196,10 @@ public class AssetService {
         return assetMapper.selectList(wrapper);
     }
 
+    public List<Asset> listAccessibleByUser(Long userId, String type) {
+        return assetMapper.selectList(buildAccessibleQueryWrapper(userId, null, type, null));
+    }
+
     public Asset findByProjectTypeAndName(Long projectId, String type, String name) {
         return assetMapper.selectOne(new LambdaQueryWrapper<Asset>()
                 .eq(Asset::getProjectId, projectId)
@@ -138,6 +212,7 @@ public class AssetService {
     @Transactional
     public Asset create(Asset asset) {
         validateAssetMediaUrls(asset);
+        applyCurrentTeamOwnership(asset);
         assetMapper.insert(asset);
 
         // 自动创建初始子资产，名称使用主资产名称
@@ -240,6 +315,17 @@ public class AssetService {
         if (StrUtil.isNotBlank(rawUrl) && StrUtil.startWithIgnoreCase(rawUrl.trim(), "data:")) {
             throw new BusinessException(fieldName + " 不支持 base64，请先调用 /api/storage/upload 上传二进制文件");
         }
+    }
+
+    private void applyCurrentTeamOwnership(Asset asset) {
+        Long creatorUserId = asset.getUserId() != null ? asset.getUserId() : SecurityUtils.getCurrentUserId();
+        if (creatorUserId == null) {
+            return;
+        }
+        asset.setUserId(creatorUserId);
+        TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(creatorUserId);
+        asset.setOwnerType(ownerScope.getOwnerType());
+        asset.setOwnerId(ownerScope.getOwnerId());
     }
 
     /**

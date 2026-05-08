@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.google.genai.Client;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
+import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.GeminiChatModel;
 import io.agentscope.core.model.Model;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,9 @@ import java.util.Map;
 @Component
 @Slf4j
 public class GeminiAiProvider extends AbstractAiProvider {
+
+    private static final GeminiToolResponseAwareChatFormatter GEMINI_CHAT_FORMATTER =
+            new GeminiToolResponseAwareChatFormatter();
 
     @Override
     public boolean supports(String platform) {
@@ -52,12 +56,20 @@ public class GeminiAiProvider extends AbstractAiProvider {
     @Override
     public Model createAgentScopeModel(AiProviderContext context) {
         requireApiKey(context.getApiKey(), "Gemini");
-        return GeminiChatModel.builder()
+        GenerateOptions defaultOptions = buildGeminiGenerateOptions(context);
+
+        GeminiChatModel.Builder builder = GeminiChatModel.builder()
                 .apiKey(context.getApiKey())
                 .modelName(context.getModelName())
+                .formatter(GEMINI_CHAT_FORMATTER)
                 .streamEnabled(true)
-                .vertexAI(false)
-                .build();
+                .vertexAI(false);
+
+        if (defaultOptions != null) {
+            builder.defaultOptions(defaultOptions);
+        }
+
+        return builder.build();
     }
 
     @Override

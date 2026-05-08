@@ -29,6 +29,7 @@ import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.core.tool.subagent.SubAgentConfig;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -82,6 +83,32 @@ public class AgentScopeAssistantService {
     public void init() {
         this.mysqlSession = new MysqlSession(dataSource, true);
         log.info("AgentScope MysqlSession 初始化完成（createIfNotExist=true）");
+    }
+
+    @PreDestroy
+    public void shutdownActiveAgentScopeStreams() {
+        int hookCount = activeStreamingHooks.size();
+        int agentCallCount = agentCallSubscriptions.size();
+        int subscriptionCount = activeSubscriptions.size();
+
+        if (hookCount == 0 && agentCallCount == 0 && subscriptionCount == 0) {
+            return;
+        }
+
+        log.info("[AgentScope:shutdown] 开始中断活跃 AgentScope 流: hooks={}, agentCalls={}, subscriptions={}",
+                hookCount, agentCallCount, subscriptionCount);
+
+        activeStreamingHooks.values().forEach(StreamingEventHook::interruptTrackedAgents);
+
+        agentCallSubscriptions.forEach((conversationId, disposable) ->
+                disposeQuietly(disposable, "AgentScope Agent 调用", conversationId));
+        activeSubscriptions.forEach((conversationId, disposable) ->
+                disposeQuietly(disposable, "AgentScope 流订阅", conversationId));
+
+        activeStreamingHooks.values().forEach(StreamingEventHook::clearTrackedAgents);
+        activeStreamingHooks.clear();
+        agentCallSubscriptions.clear();
+        activeSubscriptions.clear();
     }
 
     /** 保存后台 Redis 事件流的 Disposable */
@@ -978,6 +1005,18 @@ public class AgentScopeAssistantService {
     private void clearCancelFlag(String conversationId) {
         if (StrUtil.isNotBlank(conversationId)) {
             stringRedisTemplate.delete(CANCEL_FLAG_KEY + conversationId);
+        }
+    }
+
+    private void disposeQuietly(Disposable disposable, String label, String conversationId) {
+        if (disposable == null || disposable.isDisposed()) {
+            return;
+        }
+        try {
+            disposable.dispose();
+            log.info("[AgentScope:shutdown] 已释放{}: conversationId={}", label, conversationId);
+        } catch (Exception e) {
+            log.warn("[AgentScope:shutdown] 释放{}失败: conversationId={}", label, conversationId, e);
         }
     }
 }

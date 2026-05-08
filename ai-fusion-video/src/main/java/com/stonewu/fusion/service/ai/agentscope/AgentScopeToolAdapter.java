@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.agentscope;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolCallParam;
@@ -74,7 +75,7 @@ public class AgentScopeToolAdapter implements AgentTool {
             // 工具执行后再次检查，避免结果被提交回已取消的流
             cancellationToken.throwIfCancelled();
 
-            return ToolResultBlock.text(result);
+            return buildToolResult(param, result);
         }).onErrorResume(AgentCancelledException.class, e -> {
             log.info("[AgentScopeToolAdapter] 工具执行被取消: name={}", getName());
             return Mono.error(e);
@@ -87,7 +88,16 @@ public class AgentScopeToolAdapter implements AgentTool {
                     "status", "error",
                     "message", "工具执行失败: " + e.getMessage(),
                     "toolName", getName()));
-            return Mono.just(ToolResultBlock.text(errorResult));
+            return Mono.just(buildToolResult(param, errorResult));
         });
+    }
+
+    private ToolResultBlock buildToolResult(ToolCallParam param, String result) {
+        ToolResultBlock block = ToolResultBlock.text(result);
+        ToolUseBlock toolUseBlock = param != null ? param.getToolUseBlock() : null;
+        if (toolUseBlock == null) {
+            return block;
+        }
+        return block.withIdAndName(toolUseBlock.getId(), toolUseBlock.getName());
     }
 }

@@ -1,5 +1,6 @@
 {
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.compile.nullAnalysis.mode": "automatic",
-  "npm.packageManager": "pnpm"
+  "npm.packageManager": "pnpm",
+  "java.debug.settings.onBuildFailureProceed": true
 }

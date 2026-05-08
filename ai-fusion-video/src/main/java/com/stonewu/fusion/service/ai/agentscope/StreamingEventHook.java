@@ -284,6 +284,7 @@ public class StreamingEventHook implements Hook {
     private void handlePostCall(PostCallEvent event) {
         String agentName = event.getAgent().getName();
         String agentKey = getAgentKey(event);
+        String parentCallId = resolveParentCallId(event);
 
         activeAgents.remove(agentKey);
 
@@ -297,6 +298,15 @@ public class StreamingEventHook implements Hook {
                 }
             }
         } else {
+            if (parentCallId != null && !parentCallId.isEmpty()) {
+                emitEvent(new AiChatStreamRespVO()
+                        .setMessageId(messageId)
+                        .setConversationId(conversationId)
+                        .setOutputType("SUB_AGENT_FINISHED")
+                        .setParentToolCallId(parentCallId)
+                        .setAgentName(agentName)
+                        .setFinished(false));
+            }
             // 子 Agent 完成，清理映射
             activeSubAgentCalls.remove(agentKey);
             log.debug("[StreamingEventHook] 子 Agent 完成，清理映射: agentKey={}", agentKey);

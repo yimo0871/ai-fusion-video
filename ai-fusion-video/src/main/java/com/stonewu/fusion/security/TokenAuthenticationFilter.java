@@ -36,11 +36,11 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
         try {
             String token = getTokenFromRequest(request);
             if (StringUtils.hasText(token)) {
-                boolean valid = tokenService.validateToken(token);
-                if (valid) {
-                    String username = tokenService.getUsernameFromToken(token);
+                TokenService.TokenSession session = tokenService.getAccessTokenSession(token);
+                if (session != null) {
+                    String username = session.getUsername();
                     if (username != null) {
-                        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                        UserDetails userDetails = userDetailsService.loadUserByUsername(username, session.getCurrentTeamId());
 
                         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                 userDetails, null, userDetails.getAuthorities());

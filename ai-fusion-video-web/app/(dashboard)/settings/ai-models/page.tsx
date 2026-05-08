@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import {
   Bot,
   Settings2,
@@ -2495,6 +2496,7 @@ export default function AiModelsPage() {
   const [modelDialogApiConfigId, setModelDialogApiConfigId] = useState<number | undefined>(undefined);
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false);
   const [fetchModelsConfig, setFetchModelsConfig] = useState<ApiConfig | null>(null);
+  const [testingModelIds, setTestingModelIds] = useState<Set<number>>(new Set());
 
   const loadModels = useCallback(async () => {
     try {
@@ -2531,6 +2533,38 @@ export default function AiModelsPage() {
     loadConfigs();
     loadModelPresets();
   }, [loadConfigs, loadModelPresets, loadModels]);
+
+  const handleTestTextModel = async (model: AiModel) => {
+    setTestingModelIds((prev) => {
+      const next = new Set(prev);
+      next.add(model.id);
+      return next;
+    });
+
+    try {
+      const result = await aiModelApi.testTextConnectivity(model.id);
+      const preview = result.responseText.replace(/\s+/g, " ").trim();
+      const summary = preview.length > 120 ? `${preview.slice(0, 120)}...` : preview;
+      const description = [
+        summary ? `回复：${summary}` : "已收到模型响应",
+        typeof result.durationMs === "number" ? `${result.durationMs} ms` : "",
+      ].filter(Boolean).join(" · ");
+
+      toast.success(`${result.modelName} 连通正常`, {
+        description,
+      });
+    } catch (err) {
+      toast.error(`${model.name} 检测失败`, {
+        description: err instanceof Error ? err.message : "请求失败",
+      });
+    } finally {
+      setTestingModelIds((prev) => {
+        const next = new Set(prev);
+        next.delete(model.id);
+        return next;
+      });
+    }
+  };
 
   const handleDeleteModel = async (id: number) => {
     if (!confirm("确定要删除该 AI 模型吗？")) return;
@@ -2654,23 +2688,23 @@ export default function AiModelsPage() {
                         <span>{configModels.length} 个模型</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        className="p-1.5 rounded-md text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 transition-colors"
                         title="获取可用模型列表"
                       >
                         <CloudDownload className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteConfig(config.id)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        className="p-1.5 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -2774,7 +2808,26 @@ export default function AiModelsPage() {
                                     </div>
 
                                     {/* 操作按钮 */}
-                                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/model:opacity-100 transition-opacity mt-0.5">
+                                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                      {model.modelType === 1 && (
+                                        <button
+                                          onClick={() => handleTestTextModel(model)}
+                                          disabled={testingModelIds.has(model.id)}
+                                          className={cn(
+                                            "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                                            "border border-sky-500/30 text-sky-500",
+                                            "hover:bg-sky-500/10 hover:border-sky-500/50",
+                                            "disabled:opacity-60 disabled:cursor-not-allowed"
+                                          )}
+                                        >
+                                          {testingModelIds.has(model.id) ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <Search className="h-3 w-3" />
+                                          )}
+                                          {testingModelIds.has(model.id) ? "检测中" : "检测"}
+                                        </button>
+                                      )}
                                       {!model.defaultModel && (
                                         <button
                                           onClick={async () => {
@@ -2801,13 +2854,13 @@ export default function AiModelsPage() {
                                       )}
                                       <button
                                         onClick={() => { setEditingModel(model); setModelDialogApiConfigId(undefined); setModelDialogOpen(true); }}
-                                        className="p-1 rounded-md text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-colors"
+                                        className="p-1 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
                                       >
                                         <Edit2 className="h-3 w-3" />
                                       </button>
                                       <button
                                         onClick={() => handleDeleteModel(model.id)}
-                                        className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                        className="p-1 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
                                       >
                                         <Trash2 className="h-3 w-3" />
                                       </button>

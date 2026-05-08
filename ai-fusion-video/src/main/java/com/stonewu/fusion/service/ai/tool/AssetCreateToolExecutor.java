@@ -119,9 +119,7 @@ public class AssetCreateToolExecutor implements ToolExecutor {
 
             Long userId = context.getUserId();
 
-            // 权限校验：检查用户是否有权访问该项目
-            Project project = projectService.getById(projectId);
-            if (!userId.equals(project.getOwnerId()) && !projectService.isMember(projectId, userId)) {
+            if (!projectService.canAccessProject(projectId, userId)) {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "无权访问该项目").toString();
             }
@@ -134,8 +132,6 @@ public class AssetCreateToolExecutor implements ToolExecutor {
                     .properties(params.containsKey("properties") ? params.getJSONObject("properties").toString() : null)
                     .sourceType(2)
                     .userId(userId)
-                    .ownerType(1)
-                    .ownerId(userId)
                     .build();
 
             Asset saved = assetService.create(asset);

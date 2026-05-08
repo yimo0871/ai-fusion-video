@@ -79,9 +79,12 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
         if (isCustomPredictUrl(apiConfig.getApiUrl())) {
             url = apiConfig.getApiUrl();
         } else {
+            String endpoint = "global".equalsIgnoreCase(location)
+                ? "aiplatform.googleapis.com"
+                : location + "-aiplatform.googleapis.com";
             url = String.format(
-                    "https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
-                    location, projectId, location, modelCode
+                "https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
+                endpoint, projectId, location, modelCode
             );
         }
 

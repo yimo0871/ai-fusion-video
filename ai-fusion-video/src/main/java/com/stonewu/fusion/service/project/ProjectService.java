@@ -13,6 +13,8 @@ import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
 import com.stonewu.fusion.mapper.project.ProjectMapper;
 import com.stonewu.fusion.mapper.project.ProjectMemberMapper;
+import com.stonewu.fusion.security.SecurityUtils;
+import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -28,10 +30,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProjectService {
 
+    private static final int OWNER_TYPE_PERSONAL = 1;
+    private static final int OWNER_TYPE_TEAM = 2;
+
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper memberMapper;
     private final AssetMapper assetMapper;
     private final AssetItemMapper assetItemMapper;
+    private final TeamService teamService;
 
     @Cacheable(value = "project", key = "#id")
     public Project getById(Long id) {
@@ -52,10 +58,53 @@ public class ProjectService {
                 .orderByDesc(Project::getCreateTime));
     }
 
+    public List<Project> listAccessibleByUser(Long userId) {
+        Long currentTeamId = teamService.getCurrentTeamIdByUser(userId);
+        if (currentTeamId == null) {
+            return listByOwner(OWNER_TYPE_PERSONAL, userId);
+        }
+        List<Long> memberUserIds = teamService.listMemberUserIds(currentTeamId);
+        return projectMapper.selectList(new LambdaQueryWrapper<Project>()
+                .and(wrapper -> wrapper
+                        .and(teamOwned -> teamOwned
+                                .eq(Project::getOwnerType, OWNER_TYPE_TEAM)
+                    .eq(Project::getOwnerId, currentTeamId))
+                        .or(memberOwned -> memberOwned
+                                .eq(Project::getOwnerType, OWNER_TYPE_PERSONAL)
+                                .in(Project::getOwnerId, memberUserIds)))
+                .orderByDesc(Project::getCreateTime));
+    }
+
+    public boolean canAccessProject(Long projectId, Long userId) {
+        return canAccessProject(getById(projectId), userId);
+    }
+
+    public boolean canAccessProject(Project project, Long userId) {
+        if (project == null) {
+            return false;
+        }
+        if (OWNER_TYPE_PERSONAL == project.getOwnerType() && userId.equals(project.getOwnerId())) {
+            return true;
+        }
+        if (isMember(project.getId(), userId)) {
+            return true;
+        }
+        Long currentTeamId = teamService.getCurrentTeamIdByUser(userId);
+        if (currentTeamId == null) {
+            return false;
+        }
+        if (OWNER_TYPE_TEAM == project.getOwnerType() && currentTeamId.equals(project.getOwnerId())) {
+            return true;
+        }
+        return OWNER_TYPE_PERSONAL == project.getOwnerType()
+                && teamService.listMemberUserIds(currentTeamId).contains(project.getOwnerId());
+    }
+
     @CacheEvict(value = "project", allEntries = true)
     @Transactional
     public Project create(Project project) {
         validateProjectMediaUrls(project);
+        applyCurrentTeamOwnership(project);
         projectMapper.insert(project);
         return project;
     }
@@ -131,6 +180,16 @@ public class ProjectService {
         }
         rejectDataUrl(project.getCoverUrl(), "coverUrl");
         rejectDataUrl(project.getArtStyleImageUrl(), "artStyleImageUrl");
+    }
+
+    private void applyCurrentTeamOwnership(Project project) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            return;
+        }
+        TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(currentUserId);
+        project.setOwnerType(ownerScope.getOwnerType());
+        project.setOwnerId(ownerScope.getOwnerId());
     }
 
     private void rejectDataUrl(String rawUrl, String fieldName) {

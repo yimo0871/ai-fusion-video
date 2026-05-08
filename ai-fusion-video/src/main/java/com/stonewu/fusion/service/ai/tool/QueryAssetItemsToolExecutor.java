@@ -9,6 +9,7 @@ import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.project.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ import java.util.List;
 public class QueryAssetItemsToolExecutor implements ToolExecutor {
 
     private final AssetService assetService;
+    private final ProjectService projectService;
 
     private static final int MAX_BATCH_SIZE = 10;
 
@@ -148,8 +150,7 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
                             .set("message", "资产不存在"));
                     continue;
                 }
-                // 权限校验
-                if (!userId.equals(asset.getOwnerId()) && !userId.equals(asset.getUserId())) {
+                if (!assetService.canAccessAsset(asset, userId)) {
                     results.add(JSONUtil.createObj()
                             .set("assetId", id)
                             .set("status", "error")
@@ -182,13 +183,17 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
         // 方式1：按 assetId 精确查询
         if (assetId != null) {
             asset = assetService.getById(assetId);
-            if (asset != null && !userId.equals(asset.getOwnerId()) && !userId.equals(asset.getUserId())) {
+            if (asset != null && !assetService.canAccessAsset(asset, userId)) {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
             }
         }
         // 方式2：按名称模糊匹配
         else if (StrUtil.isNotBlank(assetName) && projectId != null) {
+            if (!projectService.canAccessProject(projectId, userId)) {
+                return JSONUtil.createObj().set("status", "error")
+                        .set("message", "无权访问该项目").toString();
+            }
             List<Asset> assets = assetService.listByProject(projectId);
             asset = assets.stream()
                     .filter(a -> assetName.equals(a.getName()))

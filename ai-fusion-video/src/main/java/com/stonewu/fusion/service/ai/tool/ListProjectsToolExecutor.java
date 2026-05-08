@@ -56,8 +56,7 @@ public class ListProjectsToolExecutor implements ToolExecutor {
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
             Long userId = context.getUserId();
-            // 按个人所有者查询（ownerType=1=个人）
-            List<Project> projects = projectService.listByOwner(1, userId);
+            List<Project> projects = projectService.listAccessibleByUser(userId);
 
             JSONArray projectList = new JSONArray();
             for (Project project : projects) {
@@ -75,7 +74,7 @@ public class ListProjectsToolExecutor implements ToolExecutor {
                     .set("count", projects.size())
                     .set("projects", projectList)
                     .set("hint", projects.isEmpty()
-                            ? "您还没有创建任何项目，可以先创建一个项目"
+                        ? "当前还没有可访问的项目，可以先创建一个项目"
                             : "以上是您能访问的所有项目，请告诉我您想操作哪个项目")
                     .toString();
         } catch (Exception e) {

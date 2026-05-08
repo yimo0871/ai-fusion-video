@@ -110,9 +110,8 @@ public class UpdateAssetImageToolExecutor implements ToolExecutor {
 
             Long userId = context.getUserId();
 
-            // 验证主资产是否存在（带权限验证）
             Asset asset = assetService.getById(assetId);
-            if (!userId.equals(asset.getOwnerId()) && !userId.equals(asset.getUserId())) {
+            if (!assetService.canAccessAsset(asset, userId)) {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
             }

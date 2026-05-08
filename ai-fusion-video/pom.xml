@@ -200,15 +200,15 @@
 		<dependency>
 			<groupId>io.agentscope</groupId>
 			<artifactId>agentscope-spring-boot-starter</artifactId>
-			<version>1.0.11</version>
+			<version>1.0.12</version>
 		</dependency>
 		<!-- AgentScope MySQL Session -->
 		<dependency>
 			<groupId>io.agentscope</groupId>
 			<artifactId>agentscope-extensions-session-mysql</artifactId>
-			<version>1.0.11</version>
+			<version>1.0.12</version>
 		</dependency>
-		<!-- AgentScope 1.0.11 默认升级到 json-schema-validator 3.0.1，
+		<!-- AgentScope 1.0.12 默认升级到 json-schema-validator 3.0.1，
 		会连带引入 Jackson 3.1.0，和当前 Spring Jackson 2 栈冲突 -->
 		<dependency>
 			<groupId>com.networknt</groupId>
@@ -235,11 +235,12 @@
 			<version>1.3.2</version>
 		</dependency>
 
-		<!-- Google Cloud Vertex AI SDK (Imagen 文生图) -->
+		<!-- Google Cloud Vertex AI SDK (Imagen 文生图)
+		需要与 spring-ai-vertex-ai-gemini 对齐，避免 GenerationConfig NoSuchMethodError -->
 		<dependency>
 			<groupId>com.google.cloud</groupId>
 			<artifactId>google-cloud-vertexai</artifactId>
-			<version>1.16.0</version>
+			<version>1.40.0</version>
 		</dependency>
 
 		<!-- AWS S3 SDK v2（兼容阿里云 OSS / 腾讯 COS / MinIO 等 S3 协议存储） -->

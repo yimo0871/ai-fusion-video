@@ -16,7 +16,6 @@ import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
-import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -54,8 +53,6 @@ public class StoryboardController {
     @PostMapping
     public CommonResult<Storyboard> create(@Valid @RequestBody StoryboardCreateReqVO reqVO) {
         Storyboard storyboard = StoryboardConvert.INSTANCE.convert(reqVO);
-        storyboard.setOwnerId(SecurityUtils.getCurrentUserId());
-        storyboard.setOwnerType(1);
         return CommonResult.success(storyboardService.create(storyboard));
     }
 

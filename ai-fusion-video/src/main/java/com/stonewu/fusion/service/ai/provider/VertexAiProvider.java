@@ -14,7 +14,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
-import io.agentscope.core.model.GeminiChatModel;
+import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
@@ -89,19 +89,9 @@ public class VertexAiProvider extends AbstractAiProvider {
             throw new BusinessException("Vertex AI 模型缺少 projectId 配置");
         }
 
-        GeminiChatModel.Builder builder = GeminiChatModel.builder()
-                .modelName(context.getModelName())
-                .streamEnabled(true);
-
-        builder.project(projectId)
-                .location(getLocation(context))
-                .vertexAI(true);
-
         GoogleCredentials credentials = loadGoogleCredentials(context);
-        if (credentials != null) {
-            builder.credentials(credentials);
-        }
-        return builder.build();
+        GenerateOptions defaultOptions = buildGeminiGenerateOptions(context);
+        return VertexAgentScopeProxySupport.create(context, projectId, getLocation(context), credentials, defaultOptions);
     }
 
     @Override
@@ -133,7 +123,11 @@ public class VertexAiProvider extends AbstractAiProvider {
     }
 
     private String resolveVertexEndpoint(String location) {
-        return StrUtil.blankToDefault(location, "us-central1") + "-aiplatform.googleapis.com:443";
+        String resolvedLocation = StrUtil.blankToDefault(location, "us-central1");
+        if ("global".equalsIgnoreCase(resolvedLocation)) {
+            return "aiplatform.googleapis.com:443";
+        }
+        return resolvedLocation + "-aiplatform.googleapis.com:443";
     }
 
     private GoogleCredentials loadGoogleCredentials(AiProviderContext context) {

@@ -22,11 +22,15 @@ public class SecurityUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return loadUserByUsername(username, null);
+    }
+
+    public UserDetails loadUserByUsername(String username, Long currentTeamId) throws UsernameNotFoundException {
         User user = userService.getByUsername(username);
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在: " + username);
         }
         List<Role> roles = userService.getUserRoles(user.getId());
-        return new SecurityUserDetails(user, roles);
+        return new SecurityUserDetails(user, roles, currentTeamId);
     }
 }

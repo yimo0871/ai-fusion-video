@@ -120,6 +120,18 @@ function updateLastTimelineReasoningDuration(
   return timeline;
 }
 
+function updateToolStatus(
+  timeline: TimelineItem[],
+  toolCallId: string,
+  status: "calling" | "done" | "error"
+): TimelineItem[] {
+  return timeline.map((item) =>
+    item.type === "tool" && item.id === toolCallId
+      ? { ...item, status }
+      : item
+  );
+}
+
 // ========== 工具名中文映射 ==========
 
 const toolDisplayNames: Record<string, string> = {
@@ -360,6 +372,16 @@ export function AgentPipeline({
           }
           break;
 
+        case "SUB_AGENT_FINISHED":
+          if (isSubAgent) {
+            next.timeline = updateToolStatus(
+              next.timeline,
+              event.parentToolCallId!,
+              "done"
+            );
+          }
+          break;
+
         case "DONE":
           next.status = "done";
           if (event.content) {
@@ -377,6 +399,11 @@ export function AgentPipeline({
 
         case "ERROR":
           if (isSubAgent) {
+            next.timeline = updateToolStatus(
+              next.timeline,
+              event.parentToolCallId!,
+              "error"
+            );
             next.timeline = appendToToolChildren(
               next.timeline,
               event.parentToolCallId!,

@@ -116,5 +116,13 @@ public class AiModelController {
     public CommonResult<String> presetConfig(@RequestParam("code") String code) {
         return success(modelPresetService.getPresetConfig(code));
     }
+
+    @PostMapping("/test-text-connectivity")
+    @Operation(summary = "检测文本模型连通性")
+    @Parameter(name = "id", description = "模型ID", required = true)
+    @PreAuthorize("hasRole('ADMIN')")
+    public CommonResult<AiModelConnectivityRespVO> testTextConnectivity(@RequestParam("id") Long id) {
+        return success(aiModelService.testTextModelConnectivity(id));
+    }
 }
 

@@ -69,8 +69,7 @@ public class AssetQueryToolExecutor implements ToolExecutor {
             Long userId = context.getUserId();
 
             Asset asset = assetService.getById(assetId);
-            // 权限校验：检查用户是否有权访问该资产
-            if (!userId.equals(asset.getOwnerId()) && !userId.equals(asset.getUserId())) {
+            if (!assetService.canAccessAsset(asset, userId)) {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
             }

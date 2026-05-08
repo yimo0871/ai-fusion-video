@@ -48,7 +48,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                 - 查看角色/场景/道具的详细信息和图片
 
                 如果提供了 projectId，则返回该项目下的资产（需有权限）。
-                如果没有 projectId，则返回当前用户所有的资产。
+                如果没有 projectId，则返回当前用户可访问的资产。
                 """;
     }
 
@@ -60,7 +60,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                     "properties": {
                         "projectId": {
                             "type": "number",
-                            "description": "项目ID（可选）。不传则返回用户所有资产"
+                            "description": "项目ID（可选）。不传则返回当前可访问的资产"
                         },
                         "type": {
                             "type": "string",
@@ -83,16 +83,13 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
 
             List<Asset> assets;
             if (projectId != null) {
-                // 权限校验
-                Project project = projectService.getById(projectId);
-                if (!userId.equals(project.getOwnerId()) && !projectService.isMember(projectId, userId)) {
+                if (!projectService.canAccessProject(projectId, userId)) {
                     return JSONUtil.createObj().set("status", "error")
                             .set("message", "无权访问该项目").toString();
                 }
                 assets = assetService.listByProject(projectId, type, null);
             } else {
-                // 无 projectId 时按 owner 查询用户所有资产
-                assets = assetService.listByOwner(1, userId, type);
+                assets = assetService.listAccessibleByUser(userId, type);
             }
 
             JSONArray resultArray = new JSONArray();

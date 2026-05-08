@@ -10,6 +10,8 @@ import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardSceneMapper;
+import com.stonewu.fusion.security.SecurityUtils;
+import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -29,6 +31,7 @@ public class StoryboardService {
     private final StoryboardEpisodeMapper episodeMapper;
     private final StoryboardSceneMapper sceneMapper;
     private final StoryboardItemMapper itemMapper;
+    private final TeamService teamService;
 
     // ========== 分镜脚本 ==========
 
@@ -49,6 +52,7 @@ public class StoryboardService {
     @CacheEvict(value = "storyboard", allEntries = true)
     @Transactional
     public Storyboard create(Storyboard storyboard) {
+        applyCurrentTeamOwnership(storyboard);
         storyboardMapper.insert(storyboard);
         return storyboard;
     }
@@ -174,6 +178,16 @@ public class StoryboardService {
     public StoryboardItem createItem(StoryboardItem item) {
         itemMapper.insert(item);
         return item;
+    }
+
+    private void applyCurrentTeamOwnership(Storyboard storyboard) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            return;
+        }
+        TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(currentUserId);
+        storyboard.setOwnerType(ownerScope.getOwnerType());
+        storyboard.setOwnerId(ownerScope.getOwnerId());
     }
 
     @CacheEvict(value = "storyboardItem", allEntries = true)

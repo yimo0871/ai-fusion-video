@@ -3,23 +3,32 @@ package com.stonewu.fusion.service.ai;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.common.PageResult;
+import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cn.hutool.core.util.StrUtil;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class AiModelService {
+
+    private static final int MODEL_TYPE_TEXT = 1;
+    private static final String CONNECTIVITY_TEST_MESSAGE = "Connectivity test. Reply with OK only.";
 
     private final AiModelMapper aiModelMapper;
     private final ApiConfigService apiConfigService;
@@ -130,6 +139,35 @@ public class AiModelService {
                 .last("LIMIT 1"));
     }
 
+    public AiModelConnectivityRespVO testTextModelConnectivity(Long id) {
+        AiModel model = aiModelMapper.selectById(id);
+        if (model == null) {
+            throw new BusinessException(404, "AI模型不存在");
+        }
+        if (model.getModelType() == null || model.getModelType() != MODEL_TYPE_TEXT) {
+            throw new BusinessException(400, "仅支持文本模型连通性检测");
+        }
+
+        long startTime = System.currentTimeMillis();
+        try {
+            ChatModel chatModel = chatModelFactory.getOrCreate(model);
+            ChatResponse response = chatModel.call(new Prompt(CONNECTIVITY_TEST_MESSAGE));
+
+            AiModelConnectivityRespVO respVO = new AiModelConnectivityRespVO();
+            respVO.setModelId(model.getId());
+            respVO.setModelName(model.getName());
+            respVO.setResponseText(StrUtil.blankToDefault(extractResponseText(response), "模型已响应，但未返回文本内容"));
+            respVO.setDurationMs(System.currentTimeMillis() - startTime);
+            respVO.setTestedAt(LocalDateTime.now());
+            return respVO;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException("模型连通性检测失败: "
+                    + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
+        }
+    }
+
     private void validateApiConfig(Long apiConfigId, boolean required) {
         if (apiConfigId == null) {
             if (required) {
@@ -176,5 +214,16 @@ public class AiModelService {
                 .eq(AiModel::getDefaultModel, true)
                 .eq(AiModel::getModelType, modelType)
                 .ne(AiModel::getId, excludeId));
+    }
+
+    private String extractResponseText(ChatResponse response) {
+        if (response == null || response.getResult() == null) {
+            return "";
+        }
+        AssistantMessage assistantMessage = response.getResult().getOutput();
+        if (assistantMessage == null) {
+            return "";
+        }
+        return StrUtil.trim(assistantMessage.getText());
     }
 }

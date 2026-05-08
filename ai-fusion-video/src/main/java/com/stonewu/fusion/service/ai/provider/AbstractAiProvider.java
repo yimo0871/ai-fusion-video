@@ -8,6 +8,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.model.GenerateOptions;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -193,6 +194,83 @@ public abstract class AbstractAiProvider implements AiProvider {
         return getConfigInteger(config, "thinkingBudget", "thinking_budget") != null
                 || StrUtil.isNotBlank(getConfigString(config, "reasoningEffort", "reasoning_effort"))
                 || getConfigValue(config, "thinking") != null;
+    }
+
+    protected GenerateOptions buildGeminiGenerateOptions(AiProviderContext context) {
+        GenerateOptions.Builder builder = GenerateOptions.builder();
+        boolean hasOptions = false;
+
+        Integer thinkingBudget = getConfigInteger(context.getConfig(), "thinkingBudget", "thinking_budget");
+        if (thinkingBudget != null) {
+            builder.thinkingBudget(thinkingBudget);
+            hasOptions = true;
+        } else if (isReasoningEnabled(context)) {
+            // Gemini 2.5 通过 thinkingBudget 触发 ThinkingConfig，-1 表示动态思考。
+            builder.thinkingBudget(-1);
+            hasOptions = true;
+        }
+
+        Double temperature = getConfigDouble(context.getConfig(), "temperature");
+        if (temperature != null) {
+            builder.temperature(temperature);
+            hasOptions = true;
+        }
+
+        Double topP = getConfigDouble(context.getConfig(), "topP", "top_p");
+        if (topP != null) {
+            builder.topP(topP);
+            hasOptions = true;
+        }
+
+        Integer maxTokens = getConfigInteger(context.getConfig(), "maxTokens", "max_tokens");
+        if (maxTokens != null) {
+            builder.maxTokens(maxTokens);
+            builder.maxCompletionTokens(maxTokens);
+            hasOptions = true;
+        }
+
+        Integer topK = getConfigInteger(context.getConfig(), "topK", "top_k");
+        if (topK != null) {
+            builder.topK(topK);
+            hasOptions = true;
+        }
+
+        Long seed = getConfigLong(context.getConfig(), "seed");
+        if (seed != null) {
+            builder.seed(seed);
+            hasOptions = true;
+        }
+
+        return hasOptions ? builder.build() : null;
+    }
+
+    protected Double getConfigDouble(Map<String, Object> config, String... keys) {
+        Object value = getConfigValue(config, keys);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return toDouble(value);
+        } catch (Exception e) {
+            log.warn("[AiProvider] 参数解析失败: keys={}, value={}", String.join(",", keys), value);
+            return null;
+        }
+    }
+
+    protected Long getConfigLong(Map<String, Object> config, String... keys) {
+        Object value = getConfigValue(config, keys);
+        if (value == null) {
+            return null;
+        }
+        try {
+            if (value instanceof Number number) {
+                return number.longValue();
+            }
+            return Long.parseLong(value.toString().trim());
+        } catch (Exception e) {
+            log.warn("[AiProvider] 参数解析失败: keys={}, value={}", String.join(",", keys), value);
+            return null;
+        }
     }
 
     protected String executeGet(String url, Map<String, String> headers) {

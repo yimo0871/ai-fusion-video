@@ -70,9 +70,8 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
 
             Long userId = context.getUserId();
 
-            // 权限校验
             Project project = projectService.getById(projectId);
-            if (!userId.equals(project.getOwnerId()) && !projectService.isMember(projectId, userId)) {
+            if (!projectService.canAccessProject(project, userId)) {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "无权访问该项目").toString();
             }

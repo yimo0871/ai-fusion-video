@@ -434,6 +434,16 @@ function SubAgentCard({
   const doneToolCount = children.filter(
     (c) => c.type === "tool" && (c.status === "done" || c.status === "error")
   ).length;
+  const activeToolCount = children.filter(
+    (c) => c.type === "tool" && c.status === "calling"
+  ).length;
+  const toolProgressLabel = toolCount > 0
+    ? isRunning
+      ? activeToolCount > 0
+        ? `已完成 ${doneToolCount}/${toolCount}`
+        : `已执行 ${toolCount} 步`
+      : `${toolCount} 步`
+    : null;
 
   return (
     <div
@@ -465,9 +475,9 @@ function SubAgentCard({
         <span className="font-medium text-xs">
           {getToolDisplayName(item.name)}
         </span>
-        {toolCount > 0 && (
+        {toolProgressLabel && (
           <span className="text-[10px] text-muted-foreground/60 ml-1">
-            {isRunning ? `${doneToolCount}/${toolCount}` : `${toolCount} 步`}
+            {toolProgressLabel}
           </span>
         )}
         {isRunning && (

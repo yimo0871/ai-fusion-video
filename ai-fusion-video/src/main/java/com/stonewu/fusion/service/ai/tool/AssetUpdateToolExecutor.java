@@ -83,9 +83,8 @@ public class AssetUpdateToolExecutor implements ToolExecutor {
 
             Long userId = context.getUserId();
 
-            // 权限校验：检查用户是否是资产的拥有者
             Asset asset = assetService.getById(assetId);
-            if (!userId.equals(asset.getOwnerId()) && !userId.equals(asset.getUserId())) {
+            if (!assetService.canAccessAsset(asset, userId)) {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
             }

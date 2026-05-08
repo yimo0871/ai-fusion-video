@@ -23,6 +23,15 @@ export interface AiModel {
   updateTime: string;
 }
 
+/** 文本模型连通性检测结果 */
+export interface AiModelConnectivityResult {
+  modelId: number;
+  modelName: string;
+  responseText: string;
+  durationMs: number;
+  testedAt: string;
+}
+
 /** 创建 AI 模型请求 */
 export interface AiModelCreateReq {
   name: string;
@@ -231,6 +240,10 @@ export const aiModelApi = {
   /** 删除 AI 模型 */
   delete: (id: number) =>
     http.delete<never, boolean>(`/api/ai/model/delete?id=${id}`),
+
+  /** 检测文本模型连通性 */
+  testTextConnectivity: (id: number) =>
+    http.post<never, AiModelConnectivityResult>(`/api/ai/model/test-text-connectivity?id=${id}`),
 
   /** 获取模型预设列表 */
   presets: (type?: number) =>

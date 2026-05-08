@@ -12,9 +12,11 @@ import com.stonewu.fusion.service.team.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -101,6 +103,13 @@ public class TeamController {
         return success(TeamConvert.INSTANCE.convertMemberList(teamService.getMemberList(teamId)));
     }
 
+    @PutMapping("/current")
+    @Operation(summary = "切换当前团队")
+    public CommonResult<Boolean> switchCurrentTeam(@RequestParam("teamId") Long teamId, HttpServletRequest request) {
+        teamService.switchCurrentTeam(getCurrentUserId(), teamId, getTokenFromRequest(request));
+        return success(true);
+    }
+
     /**
      * MapStruct 自动映射基础字段 + 手动补充 memberCount
      */
@@ -109,5 +118,16 @@ public class TeamController {
         vo.setMemberCount(teamMemberMapper.selectCount(
                 new LambdaQueryWrapper<TeamMember>().eq(TeamMember::getTeamId, team.getId())));
         return vo;
+    }
+
+    private String getTokenFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken)) {
+            if (bearerToken.startsWith("Bearer ")) {
+                return bearerToken.substring(7);
+            }
+            return bearerToken;
+        }
+        return request.getParameter("access_token");
     }
 }

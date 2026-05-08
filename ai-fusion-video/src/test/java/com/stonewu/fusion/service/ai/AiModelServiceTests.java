@@ -3,6 +3,8 @@ package com.stonewu.fusion.service.ai;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
@@ -15,12 +17,20 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,6 +103,49 @@ class AiModelServiceTests {
         verify(chatModelFactory).evict(202L);
         verify(agentScopeModelFactory).evict(202L);
         verifyClearOtherDefaults(3, 202L);
+    }
+
+    @Test
+    void testTextModelConnectivityShouldReturnResponseText() {
+        AiModel model = AiModel.builder()
+                .id(303L)
+                .name("Gemini Flash")
+                .code("gemini-2.5-flash")
+                .modelType(1)
+                .build();
+        ChatModel chatModel = mock(ChatModel.class);
+        ChatResponse chatResponse = new ChatResponse(
+                java.util.List.of(new Generation(new AssistantMessage("OK")))
+        );
+
+        when(aiModelMapper.selectById(303L)).thenReturn(model);
+        when(chatModelFactory.getOrCreate(model)).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse);
+
+        AiModelConnectivityRespVO result = aiModelService.testTextModelConnectivity(303L);
+
+        assertEquals(303L, result.getModelId());
+        assertEquals("Gemini Flash", result.getModelName());
+        assertEquals("OK", result.getResponseText());
+        assertThat(result.getDurationMs()).isNotNull().isGreaterThanOrEqualTo(0L);
+        assertThat(result.getTestedAt()).isNotNull();
+    }
+
+    @Test
+    void testTextModelConnectivityShouldRejectNonTextModel() {
+        AiModel model = AiModel.builder()
+                .id(304L)
+                .name("Flux Kontext")
+                .code("flux-kontext")
+                .modelType(2)
+                .build();
+        when(aiModelMapper.selectById(304L)).thenReturn(model);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> aiModelService.testTextModelConnectivity(304L));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("仅支持文本模型连通性检测", exception.getMessage());
     }
 
     private void verifyClearOtherDefaults(int expectedModelType, long excludeId) {

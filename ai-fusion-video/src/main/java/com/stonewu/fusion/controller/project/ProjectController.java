@@ -47,18 +47,13 @@ public class ProjectController {
     @Operation(summary = "按归属查询项目列表")
     @GetMapping("/list")
     public CommonResult<List<Project>> list() {
-        // ownerId 和 ownerType 均由后端决定，当前只有个人版，固定为 1
-        Long ownerId = SecurityUtils.getCurrentUserId();
-        return CommonResult.success(projectService.listByOwner(1, ownerId));
+        return CommonResult.success(projectService.listAccessibleByUser(SecurityUtils.getCurrentUserId()));
     }
 
     @Operation(summary = "创建项目")
     @PostMapping
     public CommonResult<Project> create(@Valid @RequestBody ProjectCreateReqVO reqVO) {
         Project project = ProjectConvert.INSTANCE.convert(reqVO);
-        // ownerId 和 ownerType 由后端决定，不信任前端传值，当前固定个人版
-        project.setOwnerId(SecurityUtils.getCurrentUserId());
-        project.setOwnerType(1);
         return CommonResult.success(projectService.create(project));
     }
 

@@ -184,6 +184,18 @@ function appendToToolChildren(
   });
 }
 
+function updateToolStatus(
+  timeline: TimelineItem[],
+  toolCallId: string,
+  status: "calling" | "done" | "error"
+): TimelineItem[] {
+  return timeline.map((item) =>
+    item.type === "tool" && item.id === toolCallId
+      ? { ...item, status }
+      : item
+  );
+}
+
 function appendReasoningToSubTimeline(
   children: SubTimelineItem[],
   reasoningContent: string
@@ -473,6 +485,16 @@ function createEventHandler(
               }
               break;
 
+            case "SUB_AGENT_FINISHED":
+              if (isSubAgent) {
+                next.timeline = updateToolStatus(
+                  next.timeline,
+                  event.parentToolCallId!,
+                  "done"
+                );
+              }
+              break;
+
             case "DONE":
               next.status = "done";
               if (event.content) {
@@ -490,6 +512,11 @@ function createEventHandler(
 
             case "ERROR":
               if (isSubAgent) {
+                next.timeline = updateToolStatus(
+                  next.timeline,
+                  event.parentToolCallId!,
+                  "error"
+                );
                 next.timeline = appendToToolChildren(
                   next.timeline,
                   event.parentToolCallId!,
