@@ -30,14 +30,12 @@
 
 **技术栈**：后端基于 Java 21 + Spring Boot 3.5 + Spring AI 构建，前端使用 Next.js 16 + React 19 + TypeScript 开发。
 
-### 交流群二维码(由于交流群人数人数超200，请先加我微信，我再拉进群)：
+### 交流群二维码(由于交流群人数人数超200，请加微信拉群【请加备注】)：
 
 <p align="center">
   <img src="https://image.stonewu.com/file/wechat-qrcode.png" alt="邀请二维码" width="368" />
   <img src="https://image.stonewu.com/file/ai-fusion-video-qrcode-group.png" alt="交流群二维码" width="368" />
 </p>
-
-
 
 ---
 
