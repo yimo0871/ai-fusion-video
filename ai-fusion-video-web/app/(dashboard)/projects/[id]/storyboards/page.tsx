@@ -34,6 +34,8 @@ import { StoryboardTableView } from "./_components/storyboard-table-view";
 import { StoryboardCardView } from "./_components/storyboard-card-view";
 import { StoryboardRefPanel } from "./_components/storyboard-ref-panel";
 import { CreateStoryboardDialog } from "./_components/create-dialog";
+import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
+import { assetApi } from "@/lib/api/asset";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 import { useProject } from "../project-context";
 
@@ -69,6 +71,35 @@ export default function StoryboardTabPage() {
   const [loading, setLoading] = useState(true);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  // 关联资产状态
+  const [assetsList, setAssetsList] = useState<import("@/lib/api/asset").AssetWithItems[]>([]);
+  const [assetLookup, setAssetLookup] = useState<Record<number, { item: import("@/lib/api/asset").AssetItem; asset: import("@/lib/api/asset").Asset }>>({});
+  const [editAssetsOpen, setEditAssetsOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<StoryboardItem | null>(null);
+
+  const loadProjectAssets = useCallback(async () => {
+    try {
+      const list = await assetApi.listWithItems(projectId);
+      setAssetsList(list);
+
+      const lookup: Record<number, { item: import("@/lib/api/asset").AssetItem; asset: import("@/lib/api/asset").Asset }> = {};
+      list.forEach((asset) => {
+        if (asset.items && Array.isArray(asset.items)) {
+          asset.items.forEach((item) => {
+            lookup[item.id] = { item, asset };
+          });
+        }
+      });
+      setAssetLookup(lookup);
+    } catch (err) {
+      console.error("加载资产失败:", err);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    loadProjectAssets();
+  }, [loadProjectAssets]);
 
   // 视图状态
   const [viewMode, setViewMode] = useState<ViewMode>("table");
@@ -125,6 +156,17 @@ export default function StoryboardTabPage() {
   const [activeSceneId, setActiveSceneId] = useState<number | null>(null);
   // 标记是否由用户点击触发的滚动（此时不要通过 observer 覆盖）
   const isUserScrollRef = useRef(false);
+
+  // 处理镜头选择，同时静默同步定位该镜头所属的场次
+  const handleSelectItem = useCallback((itemId: number | null) => {
+    setSelectedItemId(itemId);
+    if (itemId) {
+      const group = sceneGroups.find((g) => g.items.some((item) => item.id === itemId));
+      if (group) {
+        setActiveSceneId(group.scene.id);
+      }
+    }
+  }, [sceneGroups]);
 
   // 加载分镜
   const loadStoryboard = useCallback(async () => {
@@ -306,41 +348,80 @@ export default function StoryboardTabPage() {
     }, 600);
   };
 
-  // ========== 滚动监听：IntersectionObserver ==========
+  // ========== 滚动监听：更新当前可视场次 ==========
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || sceneGroups.length === 0) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (isUserScrollRef.current) return;
-        // 找到最靠近顶部且可见的场次
-        let topEntry: IntersectionObserverEntry | null = null;
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            if (!topEntry || entry.boundingClientRect.top < topEntry.boundingClientRect.top) {
-              topEntry = entry;
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (isUserScrollRef.current) return;
+
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollTop = container.scrollTop;
+          const scrollHeight = container.scrollHeight;
+          const clientHeight = container.clientHeight;
+
+          // 1. 如果已滚动到最顶部，直接激活第一个场次
+          if (scrollTop === 0) {
+            setActiveSceneId(sceneGroups[0].scene.id);
+            ticking = false;
+            return;
+          }
+
+          // 2. 如果已滚动到最底部（解决短场次或大屏幕下，最末尾场次无法卷到顶部触发激活线的问题）
+          if (scrollTop + clientHeight >= scrollHeight - 15) {
+            setActiveSceneId(sceneGroups[sceneGroups.length - 1].scene.id);
+            ticking = false;
+            return;
+          }
+
+          // 3. 普通滚动过程中，使用较为灵敏的激活线（容器高度的 35%，最大不超过 300px）
+          const containerRect = container.getBoundingClientRect();
+          let activeId: number | null = null;
+          let minDiff = Infinity;
+          const triggerY = Math.min(300, containerRect.height * 0.35);
+
+          for (const { scene } of sceneGroups) {
+            const el = sceneRefs.current[scene.id];
+            if (!el) continue;
+            const rect = el.getBoundingClientRect();
+            const relativeTop = rect.top - containerRect.top;
+            const relativeBottom = rect.bottom - containerRect.top;
+
+            // 判断该场次是否跨越容器顶部的激活线
+            if (relativeTop <= triggerY && relativeBottom > triggerY) {
+              activeId = scene.id;
+              break;
+            }
+
+            // 备选：如果没有跨越激活线的，记录离激活线最近的一个
+            const diff = Math.abs(relativeTop - triggerY);
+            if (diff < minDiff) {
+              minDiff = diff;
+              activeId = scene.id;
             }
           }
-        }
-        if (topEntry) {
-          const id = Number((topEntry.target as HTMLElement).dataset.sceneId);
-          if (id) setActiveSceneId(id);
-        }
-      },
-      {
-        root: container,
-        rootMargin: "-10% 0px -70% 0px",
-        threshold: 0,
+
+          if (activeId !== null) {
+            setActiveSceneId(activeId);
+          }
+          ticking = false;
+        });
+
+        ticking = true;
       }
-    );
+    };
 
-    // 观察所有场次元素
-    for (const el of Object.values(sceneRefs.current) as Array<HTMLDivElement | null>) {
-      if (el) observer.observe(el);
-    }
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    // 初始化执行一次
+    handleScroll();
 
-    return () => observer.disconnect();
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
   }, [sceneGroups]);
 
   // ========== 操作 ==========
@@ -866,6 +947,12 @@ export default function StoryboardTabPage() {
                   selectedItem={selectedItem}
                   activeSceneGroup={activeSceneGroup}
                   projectId={projectId}
+                  assetLookup={assetLookup}
+                  onEditAssets={(item) => {
+                    setEditingItem(item);
+                    setEditAssetsOpen(true);
+                  }}
+                  hideShotDetails={viewMode === "table"}
                 />
               </SheetContent>
             </Sheet>
@@ -896,12 +983,27 @@ export default function StoryboardTabPage() {
                 ref={(el) => {
                   sceneRefs.current[scene.id] = el;
                 }}
-                className="scroll-mt-4"
+                className={cn(
+                  "scroll-mt-4 p-5 rounded-2xl border transition-all duration-500 ease-out",
+                  activeSceneId === scene.id
+                    ? "bg-violet-500/[0.015] border-violet-500/15 shadow-[0_2px_8px_-3px_rgba(139,92,246,0.04)] dark:bg-violet-500/[0.005]"
+                    : "border-transparent bg-transparent"
+                )}
+                onClick={() => setActiveSceneId(scene.id)}
               >
-                {/* 场次标题 */}
-                <div className="flex items-center gap-2 mb-3">
-                  <Camera className="h-3.5 w-3.5 text-primary/60" />
-                  <h3 className="text-sm font-semibold">
+                {/* 场次标题：点击时亦可切换激活场次 */}
+                <div 
+                  className="flex items-center gap-2 mb-3 cursor-pointer group/title"
+                  onClick={() => setActiveSceneId(scene.id)}
+                >
+                  <Camera className={cn(
+                    "h-3.5 w-3.5 transition-colors",
+                    activeSceneId === scene.id ? "text-violet-500" : "text-primary/60 group-hover/title:text-primary"
+                  )} />
+                  <h3 className={cn(
+                    "text-sm font-semibold transition-colors",
+                    activeSceneId === scene.id ? "text-violet-600 dark:text-violet-400" : "group-hover/title:text-primary"
+                  )}>
                     {scene.sceneHeading ||
                       `场次 ${scene.sceneNumber || scene.id}`}
                   </h3>
@@ -922,7 +1024,7 @@ export default function StoryboardTabPage() {
                   <StoryboardTableView
                     items={items}
                     selectedItemId={selectedItemId}
-                    onSelectItem={setSelectedItemId}
+                    onSelectItem={handleSelectItem}
                     onUpdateItemField={handleUpdateItemField}
                     onAddItem={() =>
                       handleAddItem(scene.id, scene.episodeId)
@@ -932,12 +1034,17 @@ export default function StoryboardTabPage() {
                       handleReorderItems(scene.id, reordered)
                     }
                     onVideoGen={handleVideoGen}
+                    assetLookup={assetLookup}
+                    onEditAssets={(item) => {
+                      setEditingItem(item);
+                      setEditAssetsOpen(true);
+                    }}
                   />
                 ) : (
                   <StoryboardCardView
                     items={items}
                     selectedItemId={selectedItemId}
-                    onSelectItem={setSelectedItemId}
+                    onSelectItem={handleSelectItem}
                     onAddItem={() =>
                       handleAddItem(scene.id, scene.episodeId)
                     }
@@ -961,6 +1068,12 @@ export default function StoryboardTabPage() {
         selectedItem={selectedItem}
         activeSceneGroup={activeSceneGroup}
         projectId={projectId}
+        assetLookup={assetLookup}
+        onEditAssets={(item) => {
+          setEditingItem(item);
+          setEditAssetsOpen(true);
+        }}
+        hideShotDetails={viewMode === "table"}
       />
       </motion.div>
 
@@ -969,6 +1082,39 @@ export default function StoryboardTabPage() {
         title="本集合成视频"
         videoUrl={composedPreviewUrl}
         onClose={() => setComposedPreviewUrl(null)}
+      />
+
+      <EditItemAssetsDialog
+        open={editAssetsOpen}
+        item={editingItem}
+        assetsList={assetsList}
+        onClose={() => {
+          setEditAssetsOpen(false);
+          setEditingItem(null);
+        }}
+        onConfirm={async ({ characterIds, sceneAssetItemId, propIds }) => {
+          if (!editingItem) return;
+          try {
+            const updated = await storyboardApi.updateItem({
+              id: editingItem.id,
+              characterIds: characterIds,
+              sceneAssetItemId: sceneAssetItemId,
+              propIds: propIds,
+            });
+            // 局部更新场次数据状态
+            setSceneGroups((prev) =>
+              prev.map((g) => ({
+                ...g,
+                items: g.items.map((i) => (i.id === updated.id ? updated : i)),
+              }))
+            );
+            setEditAssetsOpen(false);
+            setEditingItem(null);
+          } catch (err) {
+            console.error("更新关联资产失败:", err);
+            alert("保存资产关联失败，请重试");
+          }
+        }}
       />
     </motion.div>
   );

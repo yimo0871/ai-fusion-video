@@ -64,6 +64,10 @@ public class StoryboardItemCreateReqVO {
 
     private Long sceneId;
 
+    private Long sceneAssetItemId;
+
+    private String propIds;
+
     private String remark;
 
     private String customData;

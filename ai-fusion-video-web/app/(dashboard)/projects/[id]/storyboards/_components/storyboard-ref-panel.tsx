@@ -21,6 +21,8 @@ import {
   Package,
   ExternalLink,
   Video,
+  X,
+  ZoomIn,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -97,10 +99,12 @@ function SceneAssetPanel({
   sceneGroup,
   projectId,
   storyboard,
+  onPreviewImage,
 }: {
   sceneGroup: SceneWithItems;
   projectId: number;
   storyboard: Storyboard;
+  onPreviewImage?: (url: string, title: string) => void;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -354,6 +358,7 @@ function SceneAssetPanel({
                   type={type}
                   items={items}
                   onItemClick={handleItemClick}
+                  onPreviewImage={onPreviewImage}
                 />
               )
           )}
@@ -386,10 +391,12 @@ function AssetItemGroup({
   type,
   items,
   onItemClick,
+  onPreviewImage,
 }: {
   type: keyof typeof typeConfig;
   items: AssetItemWithParent[];
   onItemClick: (item: AssetItemWithParent) => void;
+  onPreviewImage?: (url: string, title: string) => void;
 }) {
   const config = typeConfig[type];
   const Icon = config.icon;
@@ -414,13 +421,29 @@ function AssetItemGroup({
             )}
           >
             {/* 缩略图 */}
-            <div className="h-10 w-10 rounded-lg bg-muted/30 border border-border/10 overflow-hidden shrink-0 flex items-center justify-center">
+            <div
+              onClick={(e) => {
+                if (item.imageUrl && onPreviewImage) {
+                  e.stopPropagation();
+                  onPreviewImage(item.imageUrl, `${item.parentName}: ${item.name || "初始设定"}`);
+                }
+              }}
+              className={cn(
+                "h-10 w-10 rounded-lg bg-muted/30 border border-border/10 overflow-hidden shrink-0 flex items-center justify-center relative group/img",
+                item.imageUrl && "cursor-zoom-in hover:border-primary/40 transition-colors"
+              )}
+            >
               {item.imageUrl ? (
-                <img
-                  src={resolveMediaUrl(item.imageUrl) || ""}
-                  alt={item.name || item.parentName}
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  <img
+                    src={resolveMediaUrl(item.imageUrl) || ""}
+                    alt={item.name || item.parentName}
+                    className="w-full h-full object-cover transition-transform group-hover/img:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/25 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all">
+                    <ZoomIn className="h-3.5 w-3.5 text-white/90" />
+                  </div>
+                </>
               ) : (
                 <Icon
                   className={cn("h-4 w-4 text-muted-foreground/30")}
@@ -447,7 +470,19 @@ function AssetItemGroup({
 
 // ========== 镜头详情（保留原有） ==========
 
-function ItemDetail({ item, projectId }: { item: StoryboardItem; projectId: number }) {
+function ItemDetail({
+  item,
+  projectId,
+  assetLookup,
+  onEditAssets,
+  onPreviewImage,
+}: {
+  item: StoryboardItem;
+  projectId: number;
+  assetLookup?: Record<number, { item: AssetItem; asset: Asset }>;
+  onEditAssets?: () => void;
+  onPreviewImage?: (url: string, title: string) => void;
+}) {
   const router = useRouter();
   const detailRows: {
     icon: typeof Info;
@@ -542,8 +577,58 @@ function ItemDetail({ item, projectId }: { item: StoryboardItem; projectId: numb
   }, [item.characterIds, item.sceneAssetItemId, item.propIds]);
 
   useEffect(() => {
-    loadLinkedAssets();
-  }, [loadLinkedAssets]);
+    if (assetLookup && Object.keys(assetLookup).length > 0) {
+      const charItemIds = parseIds(item.characterIds);
+      const sceneItemId = item.sceneAssetItemId && item.sceneAssetItemId > 0 ? item.sceneAssetItemId : null;
+      const propItemIds = parseIds(item.propIds);
+
+      const charsMap = new Map<number, Asset & { items: AssetItem[] }>();
+      charItemIds.forEach(id => {
+        const entry = assetLookup[id];
+        if (entry) {
+          const { item: subItem, asset } = entry;
+          if (!charsMap.has(asset.id)) {
+            charsMap.set(asset.id, { ...asset, items: [] });
+          }
+          if (!charsMap.get(asset.id)!.items.some(x => x.id === subItem.id)) {
+            charsMap.get(asset.id)!.items.push(subItem);
+          }
+        }
+      });
+
+      const scenesList: (Asset & { items: AssetItem[] })[] = [];
+      if (sceneItemId) {
+        const entry = assetLookup[sceneItemId];
+        if (entry) {
+          const { item: subItem, asset } = entry;
+          scenesList.push({ ...asset, items: [subItem] });
+        }
+      }
+
+      const propsMap = new Map<number, Asset & { items: AssetItem[] }>();
+      propItemIds.forEach(id => {
+        const entry = assetLookup[id];
+        if (entry) {
+          const { item: subItem, asset } = entry;
+          if (!propsMap.has(asset.id)) {
+            propsMap.set(asset.id, { ...asset, items: [] });
+          }
+          if (!propsMap.get(asset.id)!.items.some(x => x.id === subItem.id)) {
+            propsMap.get(asset.id)!.items.push(subItem);
+          }
+        }
+      });
+
+      setLinkedAssets({
+        characters: Array.from(charsMap.values()),
+        scenes: scenesList,
+        props: Array.from(propsMap.values()),
+      });
+      setAssetsLoading(false);
+    } else {
+      loadLinkedAssets();
+    }
+  }, [item.characterIds, item.sceneAssetItemId, item.propIds, assetLookup, loadLinkedAssets]);
 
   const hasLinkedAssets =
     linkedAssets.characters.length > 0 ||
@@ -563,7 +648,17 @@ function ItemDetail({ item, projectId }: { item: StoryboardItem; projectId: numb
       {(item.imageUrl ||
         item.referenceImageUrl ||
         item.generatedImageUrl) && (
-        <div className="rounded-lg overflow-hidden border border-border/20">
+        <div
+          onClick={() => {
+            const rawUrl = item.generatedImageUrl || item.imageUrl || item.referenceImageUrl;
+            if (rawUrl && onPreviewImage) {
+              onPreviewImage(rawUrl, `镜头 #${item.shotNumber || item.autoShotNumber || ""} 画面`);
+            }
+          }}
+          className={cn(
+            "rounded-lg overflow-hidden border border-border/20 relative group/preview cursor-zoom-in hover:border-primary/40 transition-colors"
+          )}
+        >
           <img
             src={
               (resolveMediaUrl(item.generatedImageUrl ||
@@ -571,8 +666,11 @@ function ItemDetail({ item, projectId }: { item: StoryboardItem; projectId: numb
                 item.referenceImageUrl) as string)
             }
             alt="镜头画面"
-            className="w-full aspect-video object-cover"
+            className="w-full aspect-video object-cover transition-transform group-hover/preview:scale-102"
           />
+          <div className="absolute inset-0 bg-black/0 group-hover/preview:bg-black/25 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-all">
+            <ZoomIn className="h-5 w-5 text-white/90" />
+          </div>
         </div>
       )}
 
@@ -692,32 +790,49 @@ function ItemDetail({ item, projectId }: { item: StoryboardItem; projectId: numb
         </div>
       )}
 
-      {!assetsLoading && hasLinkedAssets && (
+      {!assetsLoading && (
         <div className="border-t border-border/20 pt-4 space-y-4">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Users className="h-3 w-3" /> 关联资产
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Users className="h-3 w-3" /> 关联资产
+            </h4>
+            {onEditAssets && (
+              <button
+                onClick={onEditAssets}
+                className="text-[10px] text-primary hover:underline font-medium"
+              >
+                编辑关联
+              </button>
+            )}
+          </div>
 
-          {(
-            [
-              ["character", linkedAssets.characters],
-              ["scene", linkedAssets.scenes],
-              ["prop", linkedAssets.props],
-            ] as [keyof typeof typeConfig, (Asset & { items: AssetItem[] })[]][]
-          ).map(
-            ([type, assets]) =>
-              assets.length > 0 && (
-                <LinkedAssetGroup
-                  key={type}
-                  type={type}
-                  assets={assets}
-                  onAssetClick={(id) =>
-                    router.push(
-                      `/projects/${projectId}/assets?highlight=${id}`
-                    )
-                  }
-                />
-              )
+          {!hasLinkedAssets ? (
+            <p className="text-[11px] text-muted-foreground/50 italic pl-1">
+              暂无镜头关联资产，请点击右上角编辑关联
+            </p>
+          ) : (
+            (
+              [
+                ["character", linkedAssets.characters],
+                ["scene", linkedAssets.scenes],
+                ["prop", linkedAssets.props],
+              ] as [keyof typeof typeConfig, (Asset & { items: AssetItem[] })[]][]
+            ).map(
+              ([type, assets]) =>
+                assets.length > 0 && (
+                  <LinkedAssetGroup
+                    key={type}
+                    type={type}
+                    assets={assets}
+                    onAssetClick={(id) =>
+                      router.push(
+                        `/projects/${projectId}/assets?highlight=${id}`
+                      )
+                    }
+                    onPreviewImage={onPreviewImage}
+                  />
+                )
+            )
           )}
         </div>
       )}
@@ -730,10 +845,12 @@ function LinkedAssetGroup({
   type,
   assets,
   onAssetClick,
+  onPreviewImage,
 }: {
   type: keyof typeof typeConfig;
   assets: (Asset & { items: AssetItem[] })[];
   onAssetClick: (id: number) => void;
+  onPreviewImage?: (url: string, title: string) => void;
 }) {
   const config = typeConfig[type];
   const Icon = config.icon;
@@ -758,13 +875,29 @@ function LinkedAssetGroup({
                 "hover:bg-muted/30"
               )}
             >
-              <div className="h-9 w-9 rounded-lg bg-muted/30 border border-border/10 overflow-hidden shrink-0 flex items-center justify-center">
+              <div
+                onClick={(e) => {
+                  if (asset.coverUrl && onPreviewImage) {
+                    e.stopPropagation();
+                    onPreviewImage(asset.coverUrl, asset.name);
+                  }
+                }}
+                className={cn(
+                  "h-9 w-9 rounded-lg bg-muted/30 border border-border/10 overflow-hidden shrink-0 flex items-center justify-center relative group/coverimg",
+                  asset.coverUrl && "cursor-zoom-in hover:border-primary/40 transition-colors"
+                )}
+              >
                 {asset.coverUrl ? (
-                  <img
-                    src={resolveMediaUrl(asset.coverUrl) || ""}
-                    alt={asset.name}
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <img
+                      src={resolveMediaUrl(asset.coverUrl) || ""}
+                      alt={asset.name}
+                      className="w-full h-full object-cover transition-transform group-hover/coverimg:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover/coverimg:bg-black/25 flex items-center justify-center opacity-0 group-hover/coverimg:opacity-100 transition-all">
+                      <ZoomIn className="h-3.5 w-3.5 text-white/90" />
+                    </div>
+                  </>
                 ) : (
                   <Icon className="h-3.5 w-3.5 text-muted-foreground/30" />
                 )}
@@ -789,14 +922,23 @@ function LinkedAssetGroup({
                   .map((sub) => (
                     <div
                       key={sub.id}
-                      className="aspect-square rounded-lg overflow-hidden border border-border/10 bg-muted/20"
+                      onClick={(e) => {
+                        if (sub.imageUrl && onPreviewImage) {
+                          e.stopPropagation();
+                          onPreviewImage(sub.imageUrl, `${asset.name}: ${sub.name || "初始设定"}`);
+                        }
+                      }}
+                      className="aspect-square rounded-lg overflow-hidden border border-border/10 bg-muted/20 relative group/subimg cursor-zoom-in hover:border-primary/40 transition-colors"
                       title={sub.name || undefined}
                     >
                       <img
                         src={resolveMediaUrl(sub.imageUrl) || ""}
                         alt={sub.name || "子资产"}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-transform group-hover/subimg:scale-105"
                       />
+                      <div className="absolute inset-0 bg-black/0 group-hover/subimg:bg-black/25 flex items-center justify-center opacity-0 group-hover/subimg:opacity-100 transition-all">
+                        <ZoomIn className="h-3.5 w-3.5 text-white/90" />
+                      </div>
                     </div>
                   ))}
               </div>
@@ -881,18 +1023,40 @@ export function StoryboardRefPanel({
   selectedItem,
   activeSceneGroup,
   projectId,
+  assetLookup,
+  onEditAssets,
+  hideShotDetails = false,
 }: {
   storyboard: Storyboard;
   items: StoryboardItem[];
   selectedItem: StoryboardItem | null;
   activeSceneGroup?: SceneWithItems | null;
   projectId: number;
+  assetLookup?: Record<number, { item: AssetItem; asset: Asset }>;
+  onEditAssets?: (item: StoryboardItem) => void;
+  hideShotDetails?: boolean;
 }) {
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewImageTitle, setPreviewImageTitle] = useState<string>("");
+
+  const handlePreviewImage = useCallback((url: string, title: string) => {
+    setPreviewImageUrl(url);
+    setPreviewImageTitle(title);
+  }, []);
+
+  const showShot = selectedItem && !hideShotDetails;
+
   return (
-    <div className="w-full lg:w-72 border-l border-border/20 flex flex-col shrink-0 bg-card/20 overflow-y-auto h-full">
-      {selectedItem ? (
+    <div className="w-full lg:w-72 border-l border-border/20 flex flex-col shrink-0 bg-card/20 overflow-y-auto h-full relative">
+      {showShot ? (
         <>
-          <ItemDetail item={selectedItem} projectId={projectId} />
+          <ItemDetail
+            item={selectedItem}
+            projectId={projectId}
+            assetLookup={assetLookup}
+            onEditAssets={() => onEditAssets?.(selectedItem)}
+            onPreviewImage={handlePreviewImage}
+          />
           {activeSceneGroup && (
             <>
               <div className="mx-4 border-t border-border/30" />
@@ -900,6 +1064,7 @@ export function StoryboardRefPanel({
                 sceneGroup={activeSceneGroup}
                 projectId={projectId}
                 storyboard={storyboard}
+                onPreviewImage={handlePreviewImage}
               />
             </>
           )}
@@ -909,9 +1074,36 @@ export function StoryboardRefPanel({
           sceneGroup={activeSceneGroup}
           projectId={projectId}
           storyboard={storyboard}
+          onPreviewImage={handlePreviewImage}
         />
       ) : (
         <StoryboardOverview storyboard={storyboard} items={items} />
+      )}
+
+      {/* 图片大图预览灯箱 */}
+      {previewImageUrl && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute -top-12 right-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              type="button"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={resolveMediaUrl(previewImageUrl) || ""}
+              alt={previewImageTitle}
+              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-white/10 select-none pointer-events-none"
+            />
+            <p className="text-white/90 text-xs font-medium px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm border border-white/5">
+              {previewImageTitle}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

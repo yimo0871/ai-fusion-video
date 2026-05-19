@@ -66,11 +66,11 @@ public class AuthController {
     @Operation(summary = "登录")
     public CommonResult<LoginRespVO> login(@Valid @RequestBody LoginReqVO reqVO) {
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(reqVO.getUsername(), reqVO.getPassword())
-        );
+                new UsernamePasswordAuthenticationToken(reqVO.getUsername(), reqVO.getPassword()));
         SecurityUserDetails userDetails = (SecurityUserDetails) authentication.getPrincipal();
         Long currentTeamId = teamService.getCurrentTeamIdByUser(userDetails.getUserId());
-        TokenService.TokenPair tokenPair = tokenService.createToken(userDetails.getUserId(), userDetails.getUsername(), currentTeamId);
+        TokenService.TokenPair tokenPair = tokenService.createToken(userDetails.getUserId(), userDetails.getUsername(),
+                currentTeamId);
 
         User user = userService.getById(userDetails.getUserId());
         return success(buildLoginResp(tokenPair, user));
@@ -203,32 +203,34 @@ public class AuthController {
             if (StrUtil.isBlank(host)) {
                 throw new BusinessException(400, "系统邮箱服务未配置，请使用日志方式找回或联系管理员");
             }
-            
+
             // 生成 token
             String token = IdUtil.fastSimpleUUID();
             String key = "auth:reset-token:email:" + token;
             stringRedisTemplate.opsForValue().set(key, String.valueOf(user.getId()), 24, TimeUnit.HOURS);
-            
+
             // 发送邮件
             String siteBaseUrl = systemConfigService.getSiteBaseUrl();
             if (StrUtil.isBlank(siteBaseUrl)) {
                 throw new BusinessException(500, "系统未配置项目访问域名，请联系管理员配置后再试");
             }
-            
+
             String resetUrl = siteBaseUrl + "/forgot-password?token=" + token + "&type=email";
             String emailContent = String.format(
-                "<div style='font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;'>" +
-                "  <h2 style='color: #333;'>融光 · AI视频创作平台密码重置</h2>" +
-                "  <p>您好 %s，</p>" +
-                "  <p>我们收到了重置您账户密码的请求。请点击下面的链接来重置您的密码：</p>" +
-                "  <p style='margin: 30px 0;'><a href='%s' style='background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;'>重置密码</a></p>" +
-                "  <p>若无法点击上述按钮，请复制以下链接并在浏览器中打开：</p>" +
-                "  <p style='word-break: break-all; color: #666;'>%s</p>" +
-                "  <p style='color: #999; font-size: 12px; margin-top: 30px;'>该链接将在 24 小时内有效。如果您没有请求重置密码，请忽略此邮件。</p>" +
-                "</div>",
-                user.getNickname(), resetUrl, resetUrl
-            );
-            
+                    "<div style='font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;'>"
+                            +
+                            "  <h2 style='color: #333;'>融光 · AI视频创作平台密码重置</h2>" +
+                            "  <p>您好 %s，</p>" +
+                            "  <p>我们收到了重置您账户密码的请求。请点击下面的链接来重置您的密码：</p>" +
+                            "  <p style='margin: 30px 0;'><a href='%s' style='background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;'>重置密码</a></p>"
+                            +
+                            "  <p>若无法点击上述按钮，请复制以下链接并在浏览器中打开：</p>" +
+                            "  <p style='word-break: break-all; color: #666;'>%s</p>" +
+                            "  <p style='color: #999; font-size: 12px; margin-top: 30px;'>该链接将在 24 小时内有效。如果您没有请求重置密码，请忽略此邮件。</p>"
+                            +
+                            "</div>",
+                    user.getNickname(), resetUrl, resetUrl);
+
             mailService.sendHtmlEmail(user.getEmail(), "【融光】密码重置申请", emailContent);
             return success("密码重置链接已发送至您的邮箱，请在 24 小时内点击重置");
         } else if ("log".equalsIgnoreCase(type)) {
@@ -241,14 +243,14 @@ public class AuthController {
             String code = SecureUtil.sha256(rawCode);
             String key = "auth:reset-token:log:" + code;
             stringRedisTemplate.opsForValue().set(key, String.valueOf(user.getId()), 24, TimeUnit.HOURS);
-            
-            log.info("\n======================================================================\n" +
-                     "[PASSWORD RESET] 用户 {} (ID: {}) 申请重置密码。\n" +
-                     "验证码为: {}\n" +
-                     "请将该验证码复制并填入前端页面以重置密码。有效期为 24 小时。\n" +
-                     "======================================================================", 
-                     user.getUsername(), user.getId(), code);
-                     
+
+            log.warn("\n======================================================================\n" +
+                    "[PASSWORD RESET] 用户 {} (ID: {}) 申请重置密码。\n" +
+                    "验证码为: {}\n" +
+                    "请将该验证码复制并填入前端页面以重置密码。有效期为 24 小时。\n" +
+                    "======================================================================",
+                    user.getUsername(), user.getId(), code);
+
             return success("验证码已输出至系统日志，请获取并输入");
         } else {
             throw new BusinessException(400, "不支持的找回方式");
@@ -266,17 +268,17 @@ public class AuthController {
         } else {
             throw new BusinessException(400, "不支持的找回方式");
         }
-        
+
         String userIdStr = stringRedisTemplate.opsForValue().get(key);
         if (StrUtil.isBlank(userIdStr)) {
             throw new BusinessException(400, "该重置链接或验证码已失效或已过期");
         }
-        
+
         User user = userService.getById(Long.parseLong(userIdStr));
         if (user == null) {
             throw new BusinessException(404, "对应的用户不存在");
         }
-        
+
         return success(user.getUsername());
     }
 
@@ -286,7 +288,7 @@ public class AuthController {
         if (!reqVO.getNewPassword().equals(reqVO.getConfirmPassword())) {
             throw new BusinessException(400, "两次输入的密码不一致");
         }
-        
+
         String key;
         if ("email".equalsIgnoreCase(reqVO.getType())) {
             key = "auth:reset-token:email:" + reqVO.getToken();
@@ -295,18 +297,18 @@ public class AuthController {
         } else {
             throw new BusinessException(400, "不支持的找回方式");
         }
-        
+
         String userIdStr = stringRedisTemplate.opsForValue().get(key);
         if (StrUtil.isBlank(userIdStr)) {
             throw new BusinessException(400, "重置链接或验证码已失效");
         }
-        
+
         Long userId = Long.parseLong(userIdStr);
         userService.resetPassword(userId, reqVO.getNewPassword());
-        
+
         // 成功重置密码后，使 token 失效
         stringRedisTemplate.delete(key);
-        
+
         return success(true);
     }
 }

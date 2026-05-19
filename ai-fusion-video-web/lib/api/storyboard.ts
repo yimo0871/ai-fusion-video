@@ -170,6 +170,9 @@ export interface StoryboardItemCreateReq {
   transition?: string;
   duration?: number;
   sortOrder?: number;
+  characterIds?: string | null;
+  sceneAssetItemId?: number | null;
+  propIds?: string | null;
 }
 
 /** 更新分镜条目请求 */
@@ -189,6 +192,9 @@ export interface StoryboardItemUpdateReq {
   sortOrder?: number;
   imageUrl?: string;
   status?: number;
+  characterIds?: string | null;
+  sceneAssetItemId?: number | null;
+  propIds?: string | null;
 }
 
 // ========== API ==========
