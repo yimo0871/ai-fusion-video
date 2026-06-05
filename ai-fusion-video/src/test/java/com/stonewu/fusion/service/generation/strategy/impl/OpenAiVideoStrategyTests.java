@@ -7,7 +7,13 @@ import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.generation.VideoGenerationService;
+import com.stonewu.fusion.service.generation.strategy.impl.openaivideo.OpenAiCompatibleAgnesVideoProtocolAdapter;
+import com.stonewu.fusion.service.generation.strategy.impl.openaivideo.OpenAiCompatibleGenericVideoProtocolAdapter;
+import com.stonewu.fusion.service.generation.strategy.impl.openaivideo.OpenAiCompatibleSoraVideoProtocolAdapter;
+import com.stonewu.fusion.service.generation.strategy.impl.openaivideo.OpenAiCompatibleVideoProtocolRouter;
+import com.stonewu.fusion.service.generation.strategy.impl.openaivideo.OpenAiCompatibleVideoProtocolSupport;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
@@ -46,14 +52,12 @@ class OpenAiVideoStrategyTests {
 
     @Test
     void getNameUsesOpenAiCompatiblePlatformKey() {
-        OpenAiVideoStrategy strategy = new OpenAiVideoStrategy(
-                mock(AiModelService.class),
-                mock(ApiConfigService.class),
-                mock(VideoGenerationService.class),
-                mock(ModelPresetService.class),
-                mock(MediaStorageService.class),
-                storageConfigService,
-                presetArtStyleResourceResolver
+        OpenAiVideoStrategy strategy = newStrategy(
+            mock(AiModelService.class),
+            mock(ApiConfigService.class),
+            mock(VideoGenerationService.class),
+            mock(ModelPresetService.class),
+            mock(MediaStorageService.class)
         );
 
         assertThat(strategy.getName()).isEqualTo("openai_compatible");
@@ -118,14 +122,12 @@ class OpenAiVideoStrategyTests {
         when(mediaStorageService.storeBytes(any(), eq("images"), eq("jpg")))
                 .thenReturn("/media/images/cover.jpg");
 
-        OpenAiVideoStrategy strategy = new OpenAiVideoStrategy(
-                aiModelService,
-                apiConfigService,
-                videoGenerationService,
-                mock(ModelPresetService.class),
-                mediaStorageService,
-                storageConfigService,
-                presetArtStyleResourceResolver
+        OpenAiVideoStrategy strategy = newStrategy(
+            aiModelService,
+            apiConfigService,
+            videoGenerationService,
+            mock(ModelPresetService.class),
+            mediaStorageService
         );
 
         VideoTask task = VideoTask.builder().id(5L).taskId("task-1").modelId(10L).prompt("a cat playing piano")
@@ -147,6 +149,125 @@ class OpenAiVideoStrategyTests {
         assertThat(item.getDuration()).isEqualTo(4);
         verify(mediaStorageService).storeBytes(videoBytes, "videos", "mp4");
     }
+
+        @Test
+        void submitAndPollAgnesProtocolUsesJsonBodyAndVideoIdQuery() throws Exception {
+        AtomicReference<String> submitBody = new AtomicReference<>();
+        AtomicReference<String> queryPath = new AtomicReference<>();
+        AtomicReference<String> queryString = new AtomicReference<>();
+
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/videos", exchange -> {
+            if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            submitBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            writeJson(exchange, """
+                {"id":"task_123","task_id":"task_123","video_id":"video_abc","status":"queued","seconds":"5.0"}
+                """);
+            return;
+            }
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+        });
+        server.createContext("/agnesapi", exchange -> {
+            queryPath.set(exchange.getRequestURI().getPath());
+            queryString.set(exchange.getRequestURI().getQuery());
+            writeJson(exchange, """
+                {"id":"task_123","video_id":"video_abc","status":"completed","seconds":"5.0","remixed_from_video_id":"https://cdn.example.com/result.mp4","error":null}
+                """);
+        });
+        server.start();
+
+        AiModel model = AiModel.builder()
+            .id(11L)
+            .code("agnes-video-v2.0")
+            .apiConfigId(2L)
+            .modelFamily("agnes")
+            .modelProtocol("agnes")
+            .config("{\"frame_rate\":24}")
+            .build();
+        ApiConfig apiConfig = ApiConfig.builder()
+            .platform("openai_compatible")
+            .apiUrl("http://localhost:" + server.getAddress().getPort())
+            .apiKey("test-key")
+            .build();
+
+        AiModelService aiModelService = mock(AiModelService.class);
+        when(aiModelService.getById(11L)).thenReturn(model);
+        ApiConfigService apiConfigService = mock(ApiConfigService.class);
+        when(apiConfigService.getById(2L)).thenReturn(apiConfig);
+
+        VideoItem item = VideoItem.builder().id(101L).taskId(6L).status(0).build();
+        VideoGenerationService videoGenerationService = mock(VideoGenerationService.class);
+        when(videoGenerationService.listItems(6L)).thenReturn(List.of(item));
+
+        OpenAiVideoStrategy strategy = newStrategy(
+            aiModelService,
+            apiConfigService,
+            videoGenerationService,
+            mock(ModelPresetService.class),
+            mock(MediaStorageService.class)
+        );
+
+        VideoTask task = VideoTask.builder()
+            .id(6L)
+            .taskId("task-agnes")
+            .modelId(11L)
+            .prompt("a cinematic ocean wave")
+            .duration(5)
+            .firstFrameImageUrl("https://example.com/first.png")
+            .lastFrameImageUrl("https://example.com/last.png")
+            .build();
+
+        String trackingId = strategy.submit(task);
+        assertThat(trackingId).isEqualTo("video_abc");
+        assertThat(item.getPlatformTaskId()).isEqualTo("video_abc");
+        assertThat(submitBody.get()).contains("\"model\":\"agnes-video-v2.0\"");
+        assertThat(submitBody.get()).contains("\"prompt\":\"a cinematic ocean wave\"");
+        assertThat(submitBody.get()).contains("\"frame_rate\":24");
+        assertThat(submitBody.get()).contains("\"num_frames\":121");
+        assertThat(submitBody.get()).contains("\"mode\":\"keyframes\"");
+        assertThat(submitBody.get()).contains("https://example.com/first.png");
+        assertThat(submitBody.get()).contains("https://example.com/last.png");
+
+        strategy.poll(trackingId, task);
+
+        assertThat(queryPath.get()).isEqualTo("/agnesapi");
+        assertThat(queryString.get()).contains("video_id=video_abc");
+        assertThat(queryString.get()).contains("model_name=agnes-video-v2.0");
+        assertThat(item.getVideoUrl()).isEqualTo("https://cdn.example.com/result.mp4");
+        assertThat(item.getStatus()).isEqualTo(1);
+        assertThat(item.getDuration()).isEqualTo(5);
+        }
+
+        private OpenAiVideoStrategy newStrategy(AiModelService aiModelService,
+                            ApiConfigService apiConfigService,
+                            VideoGenerationService videoGenerationService,
+                            ModelPresetService modelPresetService,
+                            MediaStorageService mediaStorageService) {
+        OpenAiCompatibleVideoProtocolSupport support = new OpenAiCompatibleVideoProtocolSupport(
+            storageConfigService,
+            presetArtStyleResourceResolver
+        );
+        OpenAiCompatibleGenericVideoProtocolAdapter genericAdapter = new OpenAiCompatibleGenericVideoProtocolAdapter(support);
+        OpenAiCompatibleVideoProtocolRouter router = new OpenAiCompatibleVideoProtocolRouter(List.of(
+            genericAdapter,
+            new OpenAiCompatibleSoraVideoProtocolAdapter(genericAdapter),
+            new OpenAiCompatibleAgnesVideoProtocolAdapter(support)
+        ));
+
+        return new OpenAiVideoStrategy(
+            aiModelService,
+            apiConfigService,
+            videoGenerationService,
+            modelPresetService,
+            mediaStorageService,
+            storageConfigService,
+            presetArtStyleResourceResolver,
+            new AiModelMetadataResolver(apiConfigService),
+            support,
+            router
+        );
+        }
 
     private static void writeJson(HttpExchange exchange, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
