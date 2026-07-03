@@ -92,7 +92,7 @@ export default function SetupPage() {
       showSuccess={showSuccess}
       successTitle="初始化完成"
       successSubtitle="正在进入控制面板"
-      onTransitionComplete={() => router.replace("/dashboard")}
+      onTransitionComplete={() => window.location.replace("/dashboard")}
     >
       {/* 标题 */}
       <div className="space-y-2">

@@ -126,7 +126,7 @@ function ForgotPasswordContent() {
       showSuccess={showSuccessAnim}
       successTitle="密码重置成功"
       successSubtitle="正在跳转至登录页面"
-      onTransitionComplete={() => router.replace("/login")}
+      onTransitionComplete={() => window.location.replace("/login")}
     >
       {/* 标题控制 */}
       <div className="space-y-2">

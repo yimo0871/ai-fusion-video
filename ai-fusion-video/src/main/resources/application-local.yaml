@@ -1,7 +1,7 @@
 spring:
   # MySQL
   datasource:
-    url: jdbc:mysql://localhost:43306/ai_fusion_video?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/ai_fusion_video?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,7 +16,7 @@ spring:
   data:
     redis:
       host: localhost
-      port: 46379
+      port: 6379
       password: 123456
       database: 0
 

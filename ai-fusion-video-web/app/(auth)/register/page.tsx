@@ -26,7 +26,7 @@ export default function RegisterPage() {
     getInitStatus()
       .then((status) => {
         if (!status.initialized) {
-          router.replace("/setup");
+          window.location.replace("/setup");
           return;
         }
         setAllowRegister(status.allowRegister);
@@ -36,7 +36,7 @@ export default function RegisterPage() {
         setError("无法连接到服务器");
         setInitReady(true);
       });
-  }, [router]);
+  }, []);
 
   const validate = (): string | null => {
     if (!username.trim()) return "请输入用户名";
@@ -132,7 +132,7 @@ export default function RegisterPage() {
       showSuccess={showSuccess}
       successTitle="注册成功"
       successSubtitle="正在进入控制面板"
-      onTransitionComplete={() => router.replace("/dashboard")}
+      onTransitionComplete={() => window.location.replace("/dashboard")}
     >
       <div className="space-y-2">
         <h1 className="text-[2rem] font-bold leading-[1.1] tracking-tight text-white">

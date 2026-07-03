@@ -13,7 +13,8 @@ import { getInitStatus } from "@/lib/api/system-init";
 function LoginContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const redirectUrl = searchParams.get("redirect") || "/dashboard";
+  const rawRedirectUrl = searchParams.get("redirect") || "/dashboard";
+  const redirectUrl = rawRedirectUrl === "/" ? "/dashboard" : rawRedirectUrl;
   const login = useAuthStore((s) => s.login);
 
   const isDev = process.env.NODE_ENV === "development";
@@ -25,22 +26,20 @@ function LoginContent() {
   const [initReady, setInitReady] = useState(false);
   const [allowRegister, setAllowRegister] = useState(false);
 
-  // 检查系统初始化状态，未完成前不渲染登录表单
   useEffect(() => {
     getInitStatus()
       .then((status) => {
         if (!status.initialized) {
-          router.replace("/setup");
+          window.location.replace("/setup");
         } else {
           setAllowRegister(status.allowRegister);
           setInitReady(true);
         }
       })
       .catch(() => {
-        // 后端不可用时仍显示登录页
         setInitReady(true);
       });
-  }, [router]);
+  }, []);
 
   // 初始化检查完成前显示纯黑背景，避免登录表单闪现
   if (!initReady) {
@@ -83,7 +82,7 @@ function LoginContent() {
       showSuccess={showSuccess}
       successTitle="登录成功"
       successSubtitle="正在进入控制面板"
-      onTransitionComplete={() => router.replace(redirectUrl)}
+      onTransitionComplete={() => window.location.replace(redirectUrl)}
     >
       {/* 标题 */}
       <div className="space-y-2">
